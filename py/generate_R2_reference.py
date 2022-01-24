@@ -40,7 +40,7 @@ def main(args):
     if len(linkers) == 3:
         pfx, linkers = linkers[0], linkers[1:]
     else:
-        pfx = ''
+        pfx = namedtuple('whatever', ('seq'))('')
 
     for w1, w2, s in iproduct(wells, wells, samples):
         bcname = '>%s:%s:%s' % (w1.name, w2.name, s.name)
