@@ -1,0 +1,3 @@
+sequence_id,read1_fastq,read2_fastq,keyvalues
+dna,/home/chartl/projects/2022-01/R2_processing/benchmark/R1_dna_10m.fq.gz,/home/chartl/projects/2022-01/R2_processing/benchmark/dna_10m.fastq.gz,
+rna,/home/chartl/projects/2022-01/R2_processing/benchmark/R1_rna_10m.fq.gz,/home/chartl/projects/2022-01/R2_processing/benchmark/rna_10m.fastq.gz,
