@@ -14,6 +14,7 @@ nextflow.enable.dsl=2
  *   + trim_ncores: the number of cores to use for trimming
  */
 process trim_fq_single {
+  conda params.HOME_REPO + '/nf/envs/cutadapt.yaml'
   input:
     tuple val(sequence_id), path(fastq_file)
 
@@ -22,10 +23,10 @@ process trim_fq_single {
 
   script:
     trimmed_reads = "${sequence_id}_trimmed.fq.gz"
-    trim_report = "${sequence_id}_trim_report.json"
+    trim_report = "${sequence_id}_trim_report.txt"
 
     """
-    cutadapt -a ${config.adapter_seq} -o ${trimmed_reads} -j ${config.trim_ncores} -q ${config.trim_qual} --json ${trim_report} ${fastq_file}
+    cutadapt -a ${params.adapter_seq} -o ${trimmed_reads} -j ${params.trim_ncores} -q ${params.trim_qual} ${fastq_file} > ${trim_report}
     """
 
   stub:

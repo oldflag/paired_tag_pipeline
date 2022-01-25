@@ -13,9 +13,11 @@
  *  + combin_barcodes: path to the combinatorial ("well") barcodes sequence file
  *  + sample_barcodes: path to the sample barcodes sequence file
  *  + linker_file: path to the linker sequence file
+ *  + r2_parse_threads: number of threads to use
+ *  + umi_len: the UMI length
  */
 process parse_pairedtag_r2 {
-  conda './nf/envs/skbio.yaml'
+  conda params.HOME_REPO + '/nf/envs/skbio.yaml'
 
   input:
     tuple val(sequence_id), path(r2_fastq)
@@ -27,7 +29,7 @@ process parse_pairedtag_r2 {
     barcode_csv = "${sequence_id}.barcodes.csv.gz"
 
     """
-    python "${params.py_dir}"/parse_R2.py "${r2_fastq}" "${params.combin_barcodes}" "${params.sample_barcodes}" "${params.linker_file}" "${barcode_csv}"
+    python "${params.py_dir}"/parse_R2.py --threads "${params.r2_parse_threads}" --umi_size "${params.umi_len}" "${r2_fastq}" "${params.combin_barcodes}" "${params.sample_barcodes}" "${params.linker_file}" "${barcode_csv}"
     """
 
   stub:
@@ -55,7 +57,7 @@ process split_annot_r1 {
     tuple val(sequence_id), path(r1_trim_fq), path(barcode_csv)
 
   output:
-    tuple val(sequence_id), file 'out/*.fq.gz'
+    file 'out/*.fq.gz'
 
   script:
     """
