@@ -1,5 +1,5 @@
 /*
- * Modules for RNA and DNA alignment
+ * Modules of Star alignment for single and paired reads
  */
 
 nextflow.enable.dsl=2
@@ -12,7 +12,6 @@ nextflow.enable.dsl=2
  *   + fastq_trimmed1: read sequence
  *   + fastq_trimmed2: read sequence
  *   + star_index: index
- *   + gtf : annotation file
  *   + alignment_ncore: the number of cores to use for alignment
  */
 

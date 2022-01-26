@@ -1,5 +1,5 @@
 /*
- * main workflow for RNA and DNA alignment
+ * Test workflow for RNA and DNA alignment
  */
 
 nextflow.enable.dsl=2
@@ -25,8 +25,10 @@ test_ch_pair = Channel
 // modules
 include { star_aligner_single; star_aligner_pair } from params.HOME_REPO + '/modules/alignment'
 
+// Testing modules with single or paired reads
 workflow {
-// star_result = star_aligner_pair(test_ch_pair)
+  
+// star_result = star_aligner_pair(test_ch_pair)  // 
   star_result = star_aligner_single(test_ch_single)
   
 }
