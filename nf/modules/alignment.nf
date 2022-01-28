@@ -1,5 +1,5 @@
 /*
- * Modules of Star alignment for single and paired reads
+ * Modules of STAR(RNA) alignment for single and paired reads
  */
 
 nextflow.enable.dsl=2
@@ -13,6 +13,7 @@ nextflow.enable.dsl=2
  *   + fastq_trimmed2: read sequence
  *   + star_index: index
  *   + alignment_ncore: the number of cores to use for alignment
+ *   + ramsize: size of RAM
  */
 
 
@@ -28,8 +29,7 @@ process star_aligner_single {
 
   script: 
     prefix = "${sequence_id}"
-    prefix = "${sequence_id}"
-    outbam = prefix + '.Aligned.sortedByCoord.out.bam'
+    outbam = prefix
     input_fq1 = params.datadir + "${fastq_trimmed1}"
 
     """
@@ -39,9 +39,9 @@ process star_aligner_single {
         --outSAMtype BAM SortedByCoordinate \\
         --readFilesCommand zcat \\
         --outSAMunmapped Within \\
-        --limitBAMsortRAM 16000000000 \\
+        --limitBAMsortRAM $params.ramsize \\
         --genomeDir $params.star_index \\
-        --outFileNamePrefix $bamPrefix
+        --outFileNamePrefix $outbam
 
     """
 
@@ -54,24 +54,19 @@ process star_aligner_single {
 }
 
 process star_aligner_pair {
-  conda params.HOME_REPO + '/envs/star.yaml'
+  conda params.HOME_REPO + '/nf/envs/star.yaml'
   
     input:
       tuple val(sequence_id), val(fastq_trimmed1), val(fastq_trimmed2)
       
 
     output:
-      path ('*.bam'), emit: star_aligned
-      path "*.out", emit: alignment_report
-      file "*SJ.out.tab"
-      file "*Log.out"
-      file "*.bam.bai"
-      file "*.txt"
+      tuple val(sequence_id), path ('*.bam')
 
 
   script: 
     prefix = "${sequence_id}"
-    bamPrefix =  params.outputdir + prefix
+    outbam = prefix
     input_fq1 = params.datadir + "${fastq_trimmed1}"
     input_fq2 = params.datadir + "${fastq_trimmed2}"
 
@@ -82,16 +77,15 @@ process star_aligner_pair {
         --outSAMtype BAM SortedByCoordinate \\
         --readFilesCommand zcat \\
         --outSAMunmapped Within \\
-        --limitBAMsortRAM 16000000000 \\
+        --limitBAMsortRAM $params.ramsize \\
         --genomeDir $params.star_index \\
-        --outFileNamePrefix $bamPrefix
+        --outFileNamePrefix $outbam
 
     """
 
   stub:
     prefix = "${sequence_id}"
-    bamPrefix =  params.outputdir + prefix
-    outbam = bamPrefix + '.Aligned.sortedByCoord.out.bam'
+    outbam = prefix + '.Aligned.sortedByCoord.out.bam'
     """
     touch "${outbam}"
     """
