@@ -18,6 +18,12 @@ def xopen(fn, *args, **kwargs):
         hdl.close()
 
 
+def dxopen(fn, *args, **kwargs):
+    if fn[-2:] == 'gz':
+        return gzip.open(fn, *args, **kwargs)
+    return open(fn, *args, **kwargs)
+
+
 def read_fasta(fn):
     name, seq = None, ''
     with xopen(fn, 'rt') as f_in:
