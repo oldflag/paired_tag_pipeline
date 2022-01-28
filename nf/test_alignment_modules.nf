@@ -6,10 +6,11 @@ nextflow.enable.dsl=2
 
 
 // parameters for alignment
-params.HOME_REPO = '/home/chartl/repos/pipelines/'
+params.HOME_REPO = '/home/app.dev1/repos/pipelines/'
 params.datadir = '/home/hklim/projects/tmp/' 
 params.star_index = '/home/share/storages/2T/index/human/STAR' 
 params.alignment_ncore = 8
+params.ramsize = 16000000000
 params.outputdir = './result/'
 
 test_ch_single = Channel
@@ -30,4 +31,3 @@ workflow {
   star_result = star_aligner_single(test_ch_single)
   star_result.subscribe{ println it }
 }
-    
