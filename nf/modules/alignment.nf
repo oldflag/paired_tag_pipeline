@@ -17,41 +17,37 @@ nextflow.enable.dsl=2
 
 
 process star_aligner_single {
-  conda params.HOME_REPO + '/envs/star.yaml'
+  conda params.HOME_REPO + '/nf/envs/star.yaml'
   
     input:
       tuple val(sequence_id), val(fastq_trimmed1)
-	  
+      
 
-	output:
-	  path ('*.bam'), emit: star_aligned
-	  path "*.out", emit: alignment_report
-	  file "*SJ.out.tab"
-	  file "*Log.out"
-	  file "*.bam.bai"
-	  file "*.txt"
-
+    output:
+      tuple val(sequence_id), path ('*.bam')
 
   script: 
     prefix = "${sequence_id}"
-	bamPrefix =  params.outputdir + prefix
-	input_fq1 = params.datadir + "${fastq_trimmed1}"
+    prefix = "${sequence_id}"
+    outbam = prefix + '.Aligned.sortedByCoord.out.bam'
+    input_fq1 = params.datadir + "${fastq_trimmed1}"
 
     """
     STAR --readFilesIn $input_fq1 \\
-	    --runThreadN $params.alignment_ncore \\
-	    --twopassMode Basic \\
-	    --outSAMtype BAM SortedByCoordinate \\
-	    --readFilesCommand zcat \\
-	    --outSAMunmapped Within \\
+        --runThreadN $params.alignment_ncore \\
+        --twopassMode Basic \\
+        --outSAMtype BAM SortedByCoordinate \\
+        --readFilesCommand zcat \\
+        --outSAMunmapped Within \\
         --limitBAMsortRAM 16000000000 \\
-		--genomeDir $params.star_index \\
-	    --outFileNamePrefix $bamPrefix
+        --genomeDir $params.star_index \\
+        --outFileNamePrefix $bamPrefix
 
     """
 
   stub:
-	outbam = bamPrefix + '.Aligned.sortedByCoord.out.bam'
+    prefix = "${sequence_id}"
+    outbam = prefix + '.Aligned.sortedByCoord.out.bam'
     """
     touch "${outbam}"
     """
@@ -62,37 +58,39 @@ process star_aligner_pair {
   
     input:
       tuple val(sequence_id), val(fastq_trimmed1), val(fastq_trimmed2)
-	  
+      
 
-	output:
-	  path ('*.bam'), emit: star_aligned
-	  path "*.out", emit: alignment_report
-	  file "*SJ.out.tab"
-	  file "*Log.out"
-	  file "*.bam.bai"
-	  file "*.txt"
+    output:
+      path ('*.bam'), emit: star_aligned
+      path "*.out", emit: alignment_report
+      file "*SJ.out.tab"
+      file "*Log.out"
+      file "*.bam.bai"
+      file "*.txt"
 
 
   script: 
     prefix = "${sequence_id}"
-	bamPrefix =  params.outputdir + prefix
-	input_fq1 = params.datadir + "${fastq_trimmed1}"
-	input_fq2 = params.datadir + "${fastq_trimmed2}"
+    bamPrefix =  params.outputdir + prefix
+    input_fq1 = params.datadir + "${fastq_trimmed1}"
+    input_fq2 = params.datadir + "${fastq_trimmed2}"
 
     """
     STAR --readFilesIn $input_fq1 $input_fq2 \\
-	    --runThreadN "${params.alignment_ncore}" \\
-	    --twopassMode Basic \\
-	    --outSAMtype BAM SortedByCoordinate \\
-	    --readFilesCommand zcat \\
-	    --outSAMunmapped Within \\
+        --runThreadN "${params.alignment_ncore}" \\
+        --twopassMode Basic \\
+        --outSAMtype BAM SortedByCoordinate \\
+        --readFilesCommand zcat \\
+        --outSAMunmapped Within \\
         --limitBAMsortRAM 16000000000 \\
-		--genomeDir $params.star_index \\
-	    --outFileNamePrefix $bamPrefix
+        --genomeDir $params.star_index \\
+        --outFileNamePrefix $bamPrefix
 
     """
 
   stub:
+    prefix = "${sequence_id}"
+    bamPrefix =  params.outputdir + prefix
     outbam = bamPrefix + '.Aligned.sortedByCoord.out.bam'
     """
     touch "${outbam}"

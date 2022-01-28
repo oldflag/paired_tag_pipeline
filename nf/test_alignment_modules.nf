@@ -6,7 +6,7 @@ nextflow.enable.dsl=2
 
 
 // parameters for alignment
-params.HOME_REPO = '/home/app.dev1/test'
+params.HOME_REPO = '/home/chartl/repos/pipelines/'
 params.datadir = '/home/hklim/projects/tmp/' 
 params.star_index = '/home/share/storages/2T/index/human/STAR' 
 params.alignment_ncore = 8
@@ -23,13 +23,11 @@ test_ch_pair = Channel
 	.map{ row -> tuple(row.sequence_id, row.fastq_trimmed1, row.fastq_trimmed2)}
 
 // modules
-include { star_aligner_single; star_aligner_pair } from params.HOME_REPO + '/modules/alignment'
+include { star_aligner_single } from params.HOME_REPO + '/nf/modules/alignment'
 
 // Testing modules with single or paired reads
 workflow {
-  
-// star_result = star_aligner_pair(test_ch_pair)  // 
   star_result = star_aligner_single(test_ch_single)
-  
+  star_result.subscribe{ println it }
 }
     
