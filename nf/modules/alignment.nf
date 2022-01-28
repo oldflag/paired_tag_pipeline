@@ -15,8 +15,6 @@ nextflow.enable.dsl=2
  *   + alignment_ncore: the number of cores to use for alignment
  *   + ramsize: size of RAM
  */
-
-
 process star_aligner_single {
   conda params.HOME_REPO + '/nf/envs/star.yaml'
   
@@ -91,3 +89,37 @@ process star_aligner_pair {
     """
 }
 
+/*
+ * This process defines a mechanism for aligning genomic dna
+ * with bwa
+ *
+ * Config-defined parameters:
+ * ---------------------------
+ * alignment_ncore - the number of cores to use in alignment
+ * genome_reference - the reference file to use for bwa alignment
+ *
+ * TODO: parameter search
+ */
+
+process bwa_aligner_single {
+  conda params.HOME_REPO + '/nf/envs/bwa.yaml'
+
+  input:
+    tuple val(sequence_id), file(fq_file)
+
+  output:
+    tuple val(sequence_id), file(aln_bam)
+
+  script:
+    aln_bam = "${sequence_id}.bam"
+    rbase = params.genome_reference.toString().strip('.gz').strip('.fa')
+    """
+    bwa mem -t "${params.alignment_ncore}" "${rbase}" "${fq_file}" | samtools view -hb > "${aln_bam}"
+    """
+
+  stub:
+    aln_bam = "${sequence_id}".bam
+    """
+    touch "${aln_bam}"
+    """
+}
