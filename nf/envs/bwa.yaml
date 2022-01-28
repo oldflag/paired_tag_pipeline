@@ -1,0 +1,10 @@
+name: bwa
+channels:
+  - defaults
+  - bioconda
+dependencies:
+  - bwa
+  - openssl=1.0
+  - samtools
+  - pysam
+prefix: /home/chartl/anaconda3/envs/bwa
