@@ -19,16 +19,16 @@ process star_aligner_single {
   conda params.HOME_REPO + '/nf/envs/star.yaml'
   
     input:
-      tuple val(sequence_id), val(fastq_trimmed1)
+      tuple val(sequence_id), file(fastq_trimmed1)
       
 
     output:
-      tuple val(sequence_id), path ('*.bam')
+      tuple val(sequence_id), file(outbam)
 
   script: 
-    prefix = "${sequence_id}"
-    outbam = prefix
-    input_fq1 = params.datadir + "${fastq_trimmed1}"
+    prefix = "${sequence_id}" + '_' + fastq_trimmed1.simpleName
+    outbam = prefix + 'Aligned.sortedByCoord.out.bam'
+    input_fq1 = "${fastq_trimmed1}"
 
     """
     STAR --readFilesIn $input_fq1 \\
@@ -39,55 +39,18 @@ process star_aligner_single {
         --outSAMunmapped Within \\
         --limitBAMsortRAM $params.ramsize \\
         --genomeDir $params.star_index \\
-        --outFileNamePrefix $outbam
+        --outFileNamePrefix "${prefix}"
 
     """
 
   stub:
-    prefix = "${sequence_id}"
-    outbam = prefix + '.Aligned.sortedByCoord.out.bam'
+    prefix = "${sequence_id}" + '_' + fastq_trimmed1.simpleName
+    outbam = prefix + 'Aligned.sortedByCoord.out.bam'
     """
     touch "${outbam}"
     """
 }
 
-process star_aligner_pair {
-  conda params.HOME_REPO + '/nf/envs/star.yaml'
-  
-    input:
-      tuple val(sequence_id), val(fastq_trimmed1), val(fastq_trimmed2)
-      
-
-    output:
-      tuple val(sequence_id), path ('*.bam')
-
-
-  script: 
-    prefix = "${sequence_id}"
-    outbam = prefix
-    input_fq1 = params.datadir + "${fastq_trimmed1}"
-    input_fq2 = params.datadir + "${fastq_trimmed2}"
-
-    """
-    STAR --readFilesIn $input_fq1 $input_fq2 \\
-        --runThreadN "${params.alignment_ncore}" \\
-        --twopassMode Basic \\
-        --outSAMtype BAM SortedByCoordinate \\
-        --readFilesCommand zcat \\
-        --outSAMunmapped Within \\
-        --limitBAMsortRAM $params.ramsize \\
-        --genomeDir $params.star_index \\
-        --outFileNamePrefix $outbam
-
-    """
-
-  stub:
-    prefix = "${sequence_id}"
-    outbam = prefix + '.Aligned.sortedByCoord.out.bam'
-    """
-    touch "${outbam}"
-    """
-}
 
 /*
  * This process defines a mechanism for aligning genomic dna
@@ -111,14 +74,19 @@ process bwa_aligner_single {
     tuple val(sequence_id), file(aln_bam)
 
   script:
-    aln_bam = "${sequence_id}.bam"
-    rbase = params.genome_reference.toString().strip('.gz').strip('.fa')
+    fq_pfx = fq_file.simpleName
+    aln_bam = "${sequence_id}_${fq_pfx}.bam"
     """
-    bwa mem -t "${params.alignment_ncore}" "${rbase}" "${fq_file}" | samtools view -hb > "${aln_bam}"
+    bwa mem -t "${params.alignment_ncore}" "${params.genome_reference}" "${fq_file}" | samtools view -hb > "${aln_bam}"
+    d=\$(samtools view "${aln_bam}" | head -n 10 | wc -l)
+    if [[ "\${d}" -lt 2 ]]; then
+      exit 255
+    fi
     """
 
   stub:
-    aln_bam = "${sequence_id}".bam
+    fq_pfx = fq_file.simpleName
+    aln_bam = "${sequence_id}_${fq_pfx}.bam"
     """
     touch "${aln_bam}"
     """

@@ -132,7 +132,7 @@ def get_base(fn, pfx=None):
 
     and optionally adding a prefix (dir)
     """
-    for sfx in ('.gz', 'fq.', '.fastq', '.fastQ', '.FQ', '_R1', '_1'):
+    for sfx in ('.gz', '.fq', '.fastq', '.fastQ', '.FQ', '_R1', '_1'):
         if fn[-len(sfx):] == sfx:
             fn = fn[:-len(sfx)]
 
@@ -176,11 +176,12 @@ def main(args):
                     handle = sample_only_handle
                 else:
                     handle = reject_handle
-            handle.write('@' + name + ' ' + sfx + '\n')
-            handle.write(fq.seq + '\n')
-            handle.write('+\n')
-            handle.write(fq.qual + '\n')
-
+            if len(fq.seq) > 0:
+                handle.write('@' + name + ' ' + sfx + '\n')
+                handle.write(fq.seq + '\n')
+                handle.write('+\n')
+                handle.write(fq.qual + '\n')
+    
 
 if __name__ == '__main__':
     main(get_args())

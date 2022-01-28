@@ -57,6 +57,7 @@ process split_annot_r1 {
     tuple val(sequence_id), path(r1_trim_fq), path(barcode_csv)
 
   output:
+    val sequence_id
     file 'out/*.fq.gz'
 
   script:
