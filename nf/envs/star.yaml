@@ -1,0 +1,7 @@
+name: star
+channels:
+  - defaults
+  - bioconda
+dependencies:
+  - star
+prefix: /home/app.dev1/anaconda3/envs/star
