@@ -71,10 +71,11 @@ process bwa_aligner_single {
     tuple val(sequence_id), file(fq_file)
 
   output:
-    tuple val(sequence_id), file(aln_bam)
+    tuple val(alignment_id), file(aln_bam)
 
   script:
     fq_pfx = fq_file.simpleName
+    alignment_id = "${sequence_id}_${fq_pfx}"
     aln_bam = "${sequence_id}_${fq_pfx}.bam"
     """
     bwa mem -t "${params.alignment_ncore}" "${params.genome_reference}" "${fq_file}" | samtools view -hb > "${aln_bam}"
@@ -86,6 +87,7 @@ process bwa_aligner_single {
 
   stub:
     fq_pfx = fq_file.simpleName
+    alignment_id = "${sequence_id}_${fq_pfx}"
     aln_bam = "${sequence_id}_${fq_pfx}.bam"
     """
     touch "${aln_bam}"

@@ -1,0 +1,10 @@
+name: featurecounts 
+channels:
+  - defaults
+  - bioconda
+dependencies:
+  - openssl=1.0
+  - samtools
+  - subread
+  - pysam
+prefix: /home/chartl/anaconda3/envs/featurecounts

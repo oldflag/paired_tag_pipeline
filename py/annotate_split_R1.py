@@ -132,13 +132,15 @@ def get_base(fn, pfx=None):
 
     and optionally adding a prefix (dir)
     """
-    for sfx in ('.gz', '.fq', '.fastq', '.fastQ', '.FQ', '_R1', '_1'):
-        if fn[-len(sfx):] == sfx:
-            fn = fn[:-len(sfx)]
-
     pfx = '' if pfx is None else pfx.strip('/') + '/'  # ensure just one /
+    if '_R1' in fn:
+        bs = fn.split('/')[-1].split('_R1')[0]
+    if '_1.f' in fn:
+        bs = fn.split('/')[-1].split('_1.f')[0]
+    else:
+        bs = fn.strip('.gz').strip('.FQ').strip('.fastq').strip('.fq')  
 
-    return pfx + fn
+    return pfx + bs
                
 
 def main(args):

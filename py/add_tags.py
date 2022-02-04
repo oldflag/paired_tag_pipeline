@@ -37,7 +37,7 @@ def main(args):
 
     rgpfx = args.bam[:-len('.bam')]
     header_dct['RG'] = [
-      {'RG': f'{rgpfx}_{i}',
+      {'ID': f'{rgpfx}_{i}',
        'PL': 'ILLUMINA',
        'SM': sm,
        'BC': sq, # the BC is not written by pysam even though it's a fine 'alternate' info - add to PU
@@ -45,15 +45,15 @@ def main(args):
       for i, (sm, sq) in enumerate(sample_ids.items())
     ]
 
-    sam2rg = {e['SM']: e['RG'] for e in header_dct['RG']}
+    sam2rg = {e['SM']: e['ID'] for e in header_dct['RG']}
 
     outfile = pysam.AlignmentFile(args.out, mode='wb', header=header_dct)
-    for read in handle:
-        outfile.write(transform_read(read, sam2rg))
+    for i, read in enumerate(handle):
+        outfile.write(transform_read(read, i, sam2rg))
     outfile.close()
 
 
-def transform_read(read, sbc_rg_map):
+def transform_read(read, read_n, sbc_rg_map):
     """
     Given a read of the form
     
@@ -81,9 +81,16 @@ def transform_read(read, sbc_rg_map):
     rawname, parsed, full = read.query_name.split('|')
     read.set_tag('CR', full)
     read.set_tag('BC', full.split(':')[-2])
-    read.set_tag('CB', ''.join(parsed.split(':')[1:3]))
-    read.set_tag('MI', parsed.split(':')[0])
+    read.set_tag('CB', ''.join(parsed.split(':')[1:4]))
     read.set_tag('RG', sbc_rg_map[parsed.split(':')[-2]])
+    umi = parsed.split(':')[0]
+    if umi != '*':
+        #if fragmentation happens prior to barcoding, uncomment
+        #pos_hash = str(read.reference_start)[-4:]
+        #if len(pos_hash) < 4:
+        #    pos_hash = '0' * (4 - len(pos_hash)) + pos_hash
+        read.set_tag('MI', parsed.split(':')[0]) # + pos_hash)
+    read.set_tag('XX', f'{read_n:09d}')
     read.query_name = rawname
     return read
 

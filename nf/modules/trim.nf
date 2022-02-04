@@ -16,10 +16,10 @@ nextflow.enable.dsl=2
 process trim_fq_single {
   conda params.HOME_REPO + '/nf/envs/cutadapt.yaml'
   input:
-    tuple val(sequence_id), path(fastq_file)
+    tuple val(sequence_id), file(fastq_file)
 
   output:
-    tuple val(sequence_id), path(trimmed_reads), path(trim_report)
+    tuple val(sequence_id), file(trimmed_reads), file(trim_report)
 
   script:
     trimmed_reads = "${sequence_id}_trimmed.fq.gz"
