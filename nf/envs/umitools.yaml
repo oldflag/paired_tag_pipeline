@@ -5,6 +5,6 @@ channels:
 dependencies:
   - openssl=1.0
   - samtools
-  - umitools
+  - umi_tools
   - anndata
 prefix: /home/chartl/anaconda3/envs/umitools

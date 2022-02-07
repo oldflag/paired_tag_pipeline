@@ -1,0 +1,11 @@
+name: macs2
+channels:
+  - defaults
+  - bioconda
+dependencies:
+  - python=3.7
+  - macs2
+  - bedtools
+  - samtools
+  - openssl=1.0
+prefix: /home/chartl/anaconda3/envs/macs2

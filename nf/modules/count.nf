@@ -42,9 +42,9 @@ process annotate_reads_with_features {
       -o "${count_file}" \
       "${bam_file}" 2>&1 > "${fc_log}"
 
-    samtools sort -n "fc_out/${bamname}.featureCounts.bam" > tmp.bam
+    samtools sort -n "fc_out/${bamname}.bam.featureCounts.bam" > tmp.bam
     samtools sort tmp.bam > "${annot_bam}"
-    rm "fc_out/${bamname}.featureCounts.bam" tmp.bam
+    rm "fc_out/${bamname}.bam.featureCounts.bam" tmp.bam
     """
 
   stub:
@@ -89,6 +89,8 @@ process umitools_count {
       read_counts = bamfn - '.bam' + '_' + count_tag + '_readCount.h5ad'
       umi_log = bamfn - '.bam' + '_' + count_tag + '_umitools.log'
       """
+      samtools index "${annot_bam}"
+
       umi_tools count \
         --extract-umi-method=tag \
         --umi-tag=MI \
@@ -164,9 +166,9 @@ process annotate_multiple_features {
       -o "${count_file1}" \
       "${bam_file}" 2>&1 > "${fc_log}"
 
-    samtools sort -n "fc_out/${bamname}.featureCounts.bam" > tmp.bam
+    samtools sort -n "fc_out/${bamname}.bam.featureCounts.bam" > tmp.bam
     samtools sort tmp.bam > "${annot_bam1}"
-    rm "fc_out/${bamname}.featureCounts.bam" tmp.bam
+    rm "fc_out/${bamname}.bam.featureCounts.bam" tmp.bam
 
     featureCounts -F "${annotation_type2}" \
       -O -Q 30 \
@@ -177,15 +179,18 @@ process annotate_multiple_features {
       -o "${count_file2}" \
       "${bam_file}" 2>&1 >> "${fc_log}"
 
-    samtools sort -n "fc_out/${bamname}.featureCounts.bam" > tmp.bam 
+    samtools sort -n "fc_out/${bamname}.bam.featureCounts.bam" > tmp.bam 
     samtools sort tmp.bam > "${annot_bam2}"
-    rm "fc_out/${bamname}.featureCounts.bam" tmp.bam
+    rm "fc_out/${bamname}.bam.featureCounts.bam" tmp.bam
 
-    python "${params.HOME_REPO}/py/combine_tags.py" \ 
-      --drop XN,XS \
-      "${annot_bam1}:XT:${destination_tag1}"  \
-      "${annot_bam2}:XT:${destination_tag2}" \
-      "${merged_bam}" 2>&1 > "${merge_log}"
+    pyf="${params.HOME_REPO}/py/combine_tags.py"
+
+    samtools index "${annot_bam1}"
+    samtools index "${annot_bam2}"
+
+    python "\${pyf}" "${annot_bam1}:XT:${destination_tag1}"  "${annot_bam2}:XT:${destination_tag2}" "${merged_bam}" 2>&1 > "${merge_log}"
+
+
     """
 
   stub:

@@ -10,6 +10,7 @@ nextflow.enable.dsl=2
 DIGEST = file('run_digest.csv')
 
 // general parameters
+params.RUN_NAME = 'dev-workflow-run'
 params.HOME_REPO = '/home/chartl/repos/pipelines/'
 params.py_dir = params.HOME_REPO + 'py/'
 params.output_dir = '/home/chartl/projects/2022-01/nextflow-dev/'
@@ -27,7 +28,7 @@ params.umi_len = 10
 params.r2_parse_threads = 4
 
 // parameters of genome alignment
-params.genome_reference = file('/home/share/storages/2T/genome/mouse/GRCm39.primary_assembly.genome.fa')
+params.genome_reference = file('/home/share/storages/2T/genome/mouse/GRCm39.primary_assembly.genome.fa.gz')
 params.alignment_ncore = 4
 params.ramsize = 2000000000
 params.star_index = file('/home/share/storages/2T/genome/mouse/star_index/')
@@ -37,6 +38,7 @@ params.genome_bin_file = file('/home/share/storages/2T/genome/mouse/GRCm39_1kb.s
 params.genome_gtf_file = file('/home/share/storages/2T/genome/mouse/gencode.vM28.annotation.gtf')
 params.genome_element_db = file('/home/chartl/projects/2022-02/annotation_files_for_dna/epimap/mmSDB.saf')
 params.count_ncores = 3
+params.macs_genome_type = "mm"
 
 // modules
 include { trim_fq_single } from params.HOME_REPO + '/nf/modules/trim'
@@ -44,13 +46,16 @@ include { parse_pairedtag_r2; split_annot_r1; add_tags as tag1; add_tags as tag2
 include { star_aligner_single; bwa_aligner_single } from params.HOME_REPO + '/nf/modules/alignment'
 include { annotate_multiple_features as rna_annot; umitools_count as rna_count } from params.HOME_REPO + '/nf/modules/count'
 include { annotate_multiple_features as dna_annot; umitools_count as dna_count} from params.HOME_REPO + '/nf/modules/count'
+include { annotate_reads_with_features as peak_annot; umitools_count as peak_count } from params.HOME_REPO + '/nf/modules/count'
+include { merge_bams } from params.HOME_REPO + '/nf/modules/alignment'
+include { MACS2_peakcall } from params.HOME_REPO + '/nf/modules/peaks'
 
 
 /* channel over rows of the digest */
 read1_ch = Channel.fromPath(DIGEST).splitCsv(header: true, sep: ',')
-             .map{ row -> tuple(row.sequence_id, row.read1) }
+             .map{ row -> tuple(row.sequence_id, file(row.read1)) }
 read2_ch = Channel.fromPath(DIGEST).splitCsv(header: true, sep: ',')
-             .map{ row -> tuple(row.sequence_id, row.read2) }
+             .map{ row -> tuple(row.sequence_id, file(row.read2)) }
 kv_ch = Channel.fromPath(DIGEST).splitCsv(header:true, sep: ',')
              .map{ row -> tuple(row.sequence_id, row.keyvalues) }
 
@@ -87,5 +92,13 @@ workflow {
 
   dna_counts = dna_count(dna_withGN[0], 'BN')
   rna_counts = rna_count(rna_withGN[0], 'GN')
+  dna_mg = merge_bams(dna_withGN[0].map{ it -> it[1] }.collect(),
+                      params.RUN_NAME + '_dna')
+  dna_peaks = MACS2_peakcall(dna_mg)
+
+  dna_withPeak = peak_annot(dna_withGN[0],
+                            dna_peaks.map{it -> it[2]}.collect(),
+                            'SAF', 'peaks')
+  peak_counts = peak_count(dna_withPeak[0].map{it -> tuple(it[0], it[2])}, 'XT')
 }
   

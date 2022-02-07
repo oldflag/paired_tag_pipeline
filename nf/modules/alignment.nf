@@ -93,3 +93,36 @@ process bwa_aligner_single {
     touch "${aln_bam}"
     """
 }
+
+
+/*
+ * This process defines how to merge multiple bam files together. It
+ * is written to be used with a .collect() statement; i.e.,
+ *
+ * mbam = merge_bams(sorted_bams.collect())
+ *
+ */
+process merge_bams {
+  conda params.HOME_REPO + '/nf/envs/bwa.yaml'
+
+  input:
+    file bam_file
+    val base_name
+
+  output:
+    tuple val(base_name), file(merged_bam)
+
+  script:
+    bamlist = bam_file.join('\n')
+    merged_bam = base_name + '.bam'
+    """
+    echo "${bamlist}" > bamlist.txt
+    samtools merge -b bamlist.txt "${merged_bam}"
+    """
+
+  stub:
+    merged_bam = base_name + '.bam'
+    """
+    touch merged_bam
+    """
+}
