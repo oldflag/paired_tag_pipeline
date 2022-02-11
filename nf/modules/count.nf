@@ -72,21 +72,19 @@ process annotate_reads_with_features {
  *
  */
 process umitools_count {
-  conda params.HOME_REPO + '/nf/envs/umitools.yaml'
+  conda params.HOME_REPO + '/nf/envs/umi_tools.yaml'
   input:
       tuple val(sequence_id), file(annot_bam)
       val count_tag
 
   output:
-      tuple val(sequence_id), val(count_tag), file(umi_counts), file(read_counts)
+      tuple val(sequence_id), val(count_tag), file(umi_counts_txt), file(read_counts_txt)
       file umi_log
 
   script:
       bamfn = annot_bam.simpleName
       umi_counts_txt = bamfn - '.bam' + '_' + count_tag + '_umiCount.txt.gz'
       read_counts_txt = bamfn - '.bam' + '_' + count_tag + '_readCount.txt.gz'
-      umi_counts = bamfn - '.bam' + '_' + count_tag + '_umiCount.h5ad'
-      read_counts = bamfn - '.bam' + '_' + count_tag + '_readCount.h5ad'
       umi_log = bamfn - '.bam' + '_' + count_tag + '_umitools.log'
       """
       samtools index "${annot_bam}"
@@ -103,8 +101,6 @@ process umitools_count {
         -I "${annot_bam}" \
         -S "${umi_counts_txt}" 2>&1 > "${umi_log}"
 
-      python "${params.HOME_REPO}/py/count2h5ad.py" "${umi_counts_txt}" "${umi_counts}"
-
       umi_tools count \
         --extract-umi-method=tag \
         --umi-tag=XX \
@@ -116,20 +112,17 @@ process umitools_count {
         --mapping-quality 30 \
         -I "${annot_bam}" \
         -S "${read_counts_txt}" 2>&1 >> "${umi_log}"
-
-      python "${params.HOME_REPO}/py/count2h5ad.py" "${read_counts_txt}" "${read_counts}"
+        
       """
 
     stub:
       bamfn = annot_bam.simpleName
       umi_counts_txt = bamfn - '.bam' + '_' + count_tag + '_umiCount.txt.gz'
       read_counts_txt = bamfn - '.bam' + '_' + count_tag + '_readCount.txt.gz'
-      umi_counts = bamfn - '.bam' + '_' + count_tag + '_umiCount.h5ad'
-      read_counts = bamfn - '.bam' + '_' + count_tag + '_readCount.h5ad'
       umi_log = bamfn - '.bam' + '_' + count_tag + '_umitools.log'
       """
-      touch "${umi_counts}"
-      touch "${read_counts}"
+      touch "${umi_counts_txt}"
+      touch "${read_counts_txt}"
       touch "${umi_log}"
       """
 }
@@ -210,3 +203,59 @@ process annotate_multiple_features {
     """
 }
 
+/*
+ * This module defines a process to merge multiple UMI and Read count files into one respectively 
+ * and convert the merged files into H5AD format 
+ *
+ * Config-defined parameters:
+ * -------------------------
+ *   + HOME_REPO : the path to the home repository
+ *
+ */
+
+process merge_counts {
+  
+  // publishDir "${params.output_dir}", mode: 'copy', overwrite: true
+
+  conda params.HOME_REPO + '/nf/envs/umi_tools.yaml'
+
+  input:
+      file(readCount_files)
+      file(umiCount_files)
+      val(file_header)
+
+  output:
+      file(merged_readCount_h5ad)
+      file(merged_umiCount_h5ad) 
+      // file(merged_readCount)
+      // file(merged_umiCount) 
+
+  script:
+      merged_readCount_h5ad = "${file_header}"+'_merged_readCount.h5ad'
+      merged_umiCount_h5ad = "${file_header}"+'_merged_umiCount.h5ad'
+      merged_readCount = "${file_header}"+'_merged_readCount.txt.gz'
+      merged_umiCount = "${file_header}"+'_merged_umiCount.txt.gz'
+      
+      // assume each count file has a header starting with "gene" column name
+      """
+      zcat $readCount_files | awk 'FNR!=1 && \$1=="gene" {next;}{print}' | gzip -c > "${merged_readCount}"
+
+      python "${params.HOME_REPO}/py/count2h5ad.py" "${merged_readCount}" "${merged_readCount_h5ad}"
+
+      zcat $umiCount_files | awk 'FNR!=1 && \$1=="gene" {next;}{print}' | gzip -c > "${merged_umiCount}"
+      
+      python "${params.HOME_REPO}/py/count2h5ad.py" "${merged_umiCount}" "${merged_umiCount_h5ad}"
+
+
+      """
+  stub:
+      merged_readCount_h5ad = "${file_header}"+'_merged_readCount.h5ad'
+      merged_umiCount_h5ad = "${file_header}"+'_merged_umiCount.h5ad'
+      // merged_readCount = "${file_header}"+'_merged_readCount.txt.gz'
+      // merged_umiCount = "${file_header}"+'_merged_umiCount.txt.gz'
+
+      """
+      touch "${merged_readCount_h5ad}"
+      touch "${merged_umiCount_h5ad}"
+      """
+}

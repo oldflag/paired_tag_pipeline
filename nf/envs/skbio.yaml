@@ -4,4 +4,4 @@ channels:
   - bioconda
 dependencies:
   - scikit-bio
-prefix: /home/chartl/anaconda3/envs/skbio
+prefix: /home/app.dev1/anaconda3/envs/skbio

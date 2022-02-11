@@ -4,4 +4,4 @@ channels:
   - bioconda
 dependencies:
   - cutadapt
-prefix: /home/chartl/anaconda3/envs/cutadapt
+prefix: /home/app.dev1/anaconda3/envs/cutadapt

@@ -1,0 +1,9 @@
+name: umi_tools
+channels:
+  - defaults
+  - bioconda
+dependencies:
+  - samtools
+  - umi_tools
+  - anndata
+prefix: /home/app.dev1/anaconda3/envs/umi_tools
