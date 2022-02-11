@@ -7,4 +7,4 @@ dependencies:
   - openssl=1.0
   - samtools
   - pysam
-prefix: /home/chartl/anaconda3/envs/bwa
+prefix: /home/app.dev1/anaconda3/envs/bwa

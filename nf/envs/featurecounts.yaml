@@ -7,4 +7,4 @@ dependencies:
   - samtools
   - subread
   - pysam
-prefix: /home/chartl/anaconda3/envs/featurecounts
+prefix: /home/app.dev1/anaconda3/envs/featurecounts

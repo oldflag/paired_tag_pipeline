@@ -11,9 +11,9 @@ DIGEST = file('run_digest.csv')
 
 // general parameters
 params.RUN_NAME = 'dev-workflow-run'
-params.HOME_REPO = '/home/chartl/repos/pipelines/'
+params.HOME_REPO = '/home/app.dev1/repos/pipelines/'
 params.py_dir = params.HOME_REPO + 'py/'
-params.output_dir = '/home/chartl/projects/2022-01/nextflow-dev/'
+params.output_dir = '/home/app.dev1/unittest2/result/'
 
 // parameters of R1 trimming
 params.trim_ncores = 2
@@ -44,12 +44,15 @@ params.macs_genome_type = "mm"
 include { trim_fq_single } from params.HOME_REPO + '/nf/modules/trim'
 include { parse_pairedtag_r2; split_annot_r1; add_tags as tag1; add_tags as tag2} from params.HOME_REPO + '/nf/modules/pairedtag_reads'
 include { star_aligner_single; bwa_aligner_single } from params.HOME_REPO + '/nf/modules/alignment'
-include { annotate_multiple_features as rna_annot; umitools_count as rna_count } from params.HOME_REPO + '/nf/modules/count'
+include { annotate_multiple_features as rna_annot; umitools_count as rna_count; merge_counts as dna_merge; merge_counts as rna_merge; merge_counts as peak_merge } from params.HOME_REPO + '/nf/modules/count'
 include { annotate_multiple_features as dna_annot; umitools_count as dna_count} from params.HOME_REPO + '/nf/modules/count'
 include { annotate_reads_with_features as peak_annot; umitools_count as peak_count } from params.HOME_REPO + '/nf/modules/count'
-include { merge_bams } from params.HOME_REPO + '/nf/modules/alignment'
+include { merge_bams as merge_dnabams; merge_bams as merge_annodnabams; merge_bams as merge_annornabams } from params.HOME_REPO + '/nf/modules/alignment'
 include { MACS2_peakcall } from params.HOME_REPO + '/nf/modules/peaks'
-
+include { publishData as publishdnabam; publishData as publishrnabam; 
+          publishData as publishdnareadcount; publishData as publishdnaumicount; 
+          publishData as publishrnareadcount; publishData as publishrnaumicount; 
+          publishData as publishdnapeakreadcount; publishData as publishdnapeakumicount } from params.HOME_REPO + '/nf/modules/publish' 
 
 /* channel over rows of the digest */
 read1_ch = Channel.fromPath(DIGEST).splitCsv(header: true, sep: ',')
@@ -59,8 +62,8 @@ read2_ch = Channel.fromPath(DIGEST).splitCsv(header: true, sep: ',')
 kv_ch = Channel.fromPath(DIGEST).splitCsv(header:true, sep: ',')
              .map{ row -> tuple(row.sequence_id, row.keyvalues) }
 
-
 workflow {
+
   parsed_barcodes = parse_pairedtag_r2(read2_ch)
   trimmed_reads = trim_fq_single(read1_ch)
 
@@ -92,7 +95,7 @@ workflow {
 
   dna_counts = dna_count(dna_withGN[0], 'BN')
   rna_counts = rna_count(rna_withGN[0], 'GN')
-  dna_mg = merge_bams(dna_withGN[0].map{ it -> it[1] }.collect(),
+  dna_mg = merge_dnabams(dna_withGN[0].map{ it -> it[1] }.collect(),
                       params.RUN_NAME + '_dna')
   dna_peaks = MACS2_peakcall(dna_mg)
 
@@ -100,5 +103,40 @@ workflow {
                             dna_peaks.map{it -> it[2]}.collect(),
                             'SAF', 'peaks')
   peak_counts = peak_count(dna_withPeak[0].map{it -> tuple(it[0], it[2])}, 'XT')
+  
+  // merge annotated bams
+
+  annodna_mg = merge_annodnabams(dna_withPeak[0].map{ it -> it[2] }.collect(),
+                      params.RUN_NAME + '_anno_dna') 
+  
+  annorna_mg = merge_annornabams(rna_withGN[0].map{ it -> it[1] }.collect(),
+                      params.RUN_NAME + '_anno_rna') 
+  // merge count results
+  dna_merged_h5ad = dna_merge(dna_counts[0].map{ it -> it[3] }.collect(),
+                              dna_counts[0].map{ it -> it[2] }.collect(),
+                              "DNA")
+ 
+  rna_merged_h5ad = rna_merge(rna_counts[0].map{ it -> it[3] }.collect(),
+                              rna_counts[0].map{ it -> it[2] }.collect(),
+                              "RNA")
+
+
+  peak_merged_h5ad = peak_merge(peak_counts[0].map{ it -> it[3] }.collect(),
+                                peak_counts[0].map{ it -> it[2] }.collect(),
+                                "Peak")
+
+
+  // publishing
+
+  publishdnabam(annodna_mg[0].map{ it -> it[1]})
+  publishrnabam(annorna_mg[0].map{ it -> it[1]})
+
+  publishdnareadcount(dna_merged_h5ad[0])
+  publishdnaumicount(dna_merged_h5ad[1])
+  publishrnareadcount(rna_merged_h5ad[0])
+  publishrnaumicount(rna_merged_h5ad[1])
+  publishdnapeakreadcount(peak_merged_h5ad[0])
+  publishdnapeakumicount(peak_merged_h5ad[1])
+
 }
   

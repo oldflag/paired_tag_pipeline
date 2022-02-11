@@ -103,6 +103,7 @@ process bwa_aligner_single {
  *
  */
 process merge_bams {
+  
   conda params.HOME_REPO + '/nf/envs/bwa.yaml'
 
   input:
@@ -123,6 +124,6 @@ process merge_bams {
   stub:
     merged_bam = base_name + '.bam'
     """
-    touch merged_bam
+    touch "${merged_bam}"
     """
 }
