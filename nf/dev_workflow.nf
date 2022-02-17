@@ -128,27 +128,23 @@ workflow {
   peak_counts = peak_count(dna_withPeak[0].map{it -> tuple(it[0], it[2], '')}, 'XT')
 
   // merge annotated bams
-  dna_withPeak_sm = dna_withPeak[0].map{ it -> tuple(it[0], it[2])}.groupTuple()
-  annodna_mg = merge_annodnabams(dna_withPeak_sm.map{ it -> tuple(it[1].collect(), params.RUN_NAME + '_anno_', it[0])}) 
-
-  rna_withGN_sm = rna_withGN[0].map{ it -> tuple(it[0], it[1])}.groupTuple()
-  annorna_mg = merge_annornabams(rna_withGN_sm.map{ it -> tuple(it[1].collect(), params.RUN_NAME + '_anno_', it[0])})
-
-  // merge count results
-  dna_counts_reads = dna_counts[0].map{ it -> tuple(it[0], it[3])}.groupTuple()
-  dna_counts_umi = dna_counts[0].map{ it -> tuple(it[0], it[2])}.groupTuple()
-  dna_read_merged_h5ad = dna_merge_read(dna_counts_reads.map{ it -> tuple(it[1].collect(), it[0]+"_read")})
-  dna_umi_merged_h5ad = dna_merge_umi(dna_counts_umi.map{ it -> tuple(it[1].collect(), it[0]+"_umi")})
+  annodna_mg = merge_annodnabams(dna_withPeak[0].map{ it -> tuple(it[2].collect(),params.RUN_NAME + '_anno_', 'dna')})
+  annorna_mg = merge_annornabams(rna_withGN[0].map{ it -> tuple(it[1].collect(), params.RUN_NAME + '_anno_', 'rna')})
   
-  rna_counts_reads = rna_counts[0].map{ it -> tuple(it[0], it[3])}.groupTuple()
-  rna_counts_umi = rna_counts[0].map{ it -> tuple(it[0], it[2])}.groupTuple()
-  rna_read_merged_h5ad = rna_merge_read(rna_counts_reads.map{ it -> tuple(it[1].collect(), it[0]+"_read")})
-  rna_umi_merged_h5ad = rna_merge_umi(rna_counts_umi.map{ it -> tuple(it[1].collect(), it[0]+"_umi")})
+ 
   
-  peak_counts_reads = peak_counts[0].map{ it -> tuple(it[0], it[3])}.groupTuple()
-  peak_counts_umi = peak_counts[0].map{ it -> tuple(it[0], it[2])}.groupTuple()
-  peak_read_merged_h5ad = peak_merge_read(peak_counts_reads.map{ it -> tuple(it[1].collect(), it[0]+"_peak_read")})
-  peak_umi_merged_h5ad = peak_merge_umi(peak_counts_umi.map{ it -> tuple(it[1].collect(), it[0]+"_peak_umi")})
+   // merge DNA read and umi counts
+  dna_read_merged_h5ad = dna_merge_read(dna_counts[0].map{ it -> tuple(it[3].collect(),"DNA_read")})
+  dna_umi_merged_h5ad = dna_merge_umi(dna_counts[0].map{ it -> tuple(it[2].collect(),"DNA_umi")})
+  
+  
+  // merge RNA read and umi counts
+  rna_read_merged_h5ad = rna_merge_read(rna_counts[0].map{ it -> tuple(it[3].collect(),"RNA_read")})
+  rna_umi_merged_h5ad = rna_merge_umi(rna_counts[0].map{ it -> tuple(it[2].collect(),"RNA_umi")})
+  
+  // merge Peak read and umi counts
+  peak_read_merged_h5ad = peak_merge_read(peak_counts[0].map{ it -> tuple(it[3].collect(),"PEAK_read")})
+  peak_umi_merged_h5ad = peak_merge_umi(peak_counts[0].map{ it -> tuple(it[2].collect(),"PEAK_umi")})
   
   // publish results
   publishdnabam(annodna_mg[0].map{ it -> it[0]})
