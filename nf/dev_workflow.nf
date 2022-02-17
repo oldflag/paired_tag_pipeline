@@ -71,12 +71,10 @@ kv_ch = Channel.fromPath(DIGEST).splitCsv(header:true, sep: ',')
              .map{ row -> tuple(row.sequence_id, row.keyvalues) }
 
 workflow {
-
+  
   parsed_barcodes = parse_pairedtag_r2(read2_ch)
   trimmed_reads = trim_fq_single(read1_ch)
-
   trim_bc_join = trimmed_reads.map{ r -> tuple(r[0], r[1]) }.join(parsed_barcodes)
-
   run_fastqs = split_annot_r1(trim_bc_join)
   // we have to join the two outputs into a single one
   // add indexes
@@ -88,33 +86,45 @@ workflow {
   fqjoin = fastq_ids.join(fastq_subfiles).map{ it -> tuple(it[1], it[2])}
   fqjoin = fqjoin.join(kv_ch).map{ it -> tuple(it[0], it[2], it[1])}
   fqjoin = fqjoin.transpose()
+
+  //split into DNA and RNA 
   rna_fq = fqjoin.filter{ it[1] =~ /type=rna/ }.map{it -> tuple(it[0], it[2], it[1])}
   dna_fq = fqjoin.filter{ it[1] =~ /type=dna/ }.map{it -> tuple(it[0], it[2], it[1])}
+  
+  //alignment
   dna_rawbam = bwa_aligner_single(dna_fq)
   rna_rawbam = star_aligner_single(rna_fq)
-
+  
+  //filtering and tagging
   dna_tagged = tag1(dna_rawbam.filter{ ! it[1].simpleName.contains('trimmed_unlinked') })
   rna_tagged = tag2(rna_rawbam.filter{ ! it[1].simpleName.contains('trimmed_unlinked') })
+  
+  // Bin and genome element/gene annotation with featurecounts
   dna_withGN = dna_annot(dna_tagged,
                          tuple(params.genome_bin_file, 'SAF', 'BN'),
                          tuple(params.genome_element_db, 'SAF', 'RE'))
   rna_withGN = rna_annot(rna_tagged,
                          tuple(params.genome_bin_file, 'SAF', 'BN'),
                          tuple(params.genome_gtf_file, 'GTF', 'GN'))
-
+  
+  // read and umi count with umi_tools based on a given tag
   dna_counts = dna_count(dna_withGN[0], 'BN')
   rna_counts = rna_count(rna_withGN[0], 'GN')
   
-  //grouping by antibody
+  /* Peak calling with anibodies */
+  // grouping by antibody
   dna_withGN_ab = dna_withGN[0].map{ it -> tuple(it[2].split(/;/)[1], it[1])}.groupTuple()
-  
+  // merging bams per antibody
   dna_mg = merge_dnabams(dna_withGN_ab.map{it -> tuple(it[1].collect(), params.RUN_NAME+'_dna', it[0])})
+  // peak calling per antibody and adding antibody name to peak name
   dna_peaks = MACS2_peakcall(dna_mg)
+  // combining all peak calling
   merged_saf = merge_saf(dna_peaks.map{it -> it[2]}.collect(), "all_antibodies")
-
+  // peak annotation
   dna_withPeak = peak_annot(dna_withGN[0].map{it -> tuple(it[0], it[1])},
                             merged_saf,
                             'SAF', 'peaks')
+  // read and umi count based on peaks
   peak_counts = peak_count(dna_withPeak[0].map{it -> tuple(it[0], it[2], '')}, 'XT')
 
   // merge annotated bams
@@ -125,7 +135,6 @@ workflow {
   annorna_mg = merge_annornabams(rna_withGN_sm.map{ it -> tuple(it[1].collect(), params.RUN_NAME + '_anno_', it[0])})
 
   // merge count results
-  
   dna_counts_reads = dna_counts[0].map{ it -> tuple(it[0], it[3])}.groupTuple()
   dna_counts_umi = dna_counts[0].map{ it -> tuple(it[0], it[2])}.groupTuple()
   dna_read_merged_h5ad = dna_merge_read(dna_counts_reads.map{ it -> tuple(it[1].collect(), it[0]+"_read")})
@@ -144,7 +153,6 @@ workflow {
   // publish results
   publishdnabam(annodna_mg[0].map{ it -> it[0]})
   publishrnabam(annorna_mg[0].map{ it -> it[0]})
-
   publishdnareadcount(dna_read_merged_h5ad)
   publishdnaumicount(dna_umi_merged_h5ad)
   publishrnareadcount(rna_read_merged_h5ad)
