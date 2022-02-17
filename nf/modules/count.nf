@@ -74,7 +74,7 @@ process annotate_reads_with_features {
 process umitools_count {
   conda params.HOME_REPO + '/nf/envs/umi_tools.yaml'
   input:
-      tuple val(sequence_id), file(annot_bam)
+      tuple val(sequence_id), file(annot_bam), val(keyvalues)
       val count_tag
 
   output:
@@ -131,12 +131,12 @@ process umitools_count {
 process annotate_multiple_features {
   conda params.HOME_REPO + '/nf/envs/featurecounts.yaml'
   input:
-    tuple val(sequence_id), file(bam_file)
+    tuple val(sequence_id), file(bam_file), val(keyvalues)
     tuple file(annotation_file1), val(annotation_type1), val(destination_tag1)
     tuple file(annotation_file2), val(annotation_type2), val(destination_tag2)
 
   output:
-    tuple val(sequence_id), file(merged_bam)
+    tuple val(sequence_id), file(merged_bam), val(keyvalues)
     tuple file(fc_log), file(merge_log)
 
   script:
@@ -215,47 +215,31 @@ process annotate_multiple_features {
 
 process merge_counts {
   
-  // publishDir "${params.output_dir}", mode: 'copy', overwrite: true
-
+  
   conda params.HOME_REPO + '/nf/envs/umi_tools.yaml'
 
   input:
-      file(readCount_files)
-      file(umiCount_files)
-      val(file_header)
+      tuple file(count_files), val(file_header)
 
   output:
-      file(merged_readCount_h5ad)
-      file(merged_umiCount_h5ad) 
-      // file(merged_readCount)
-      // file(merged_umiCount) 
+      file(merged_count_h5ad)
 
   script:
-      merged_readCount_h5ad = "${file_header}"+'_merged_readCount.h5ad'
-      merged_umiCount_h5ad = "${file_header}"+'_merged_umiCount.h5ad'
-      merged_readCount = "${file_header}"+'_merged_readCount.txt.gz'
-      merged_umiCount = "${file_header}"+'_merged_umiCount.txt.gz'
+      merged_count_h5ad = "${file_header}"+'_merged.h5ad'
+      merged_count = "${file_header}"+'_merged.txt.gz'
       
       // assume each count file has a header starting with "gene" column name
       """
-      zcat $readCount_files | awk 'FNR!=1 && \$1=="gene" {next;}{print}' | gzip -c > "${merged_readCount}"
+      zcat $count_files | awk 'FNR!=1 && \$1=="gene" {next;}{print}' | gzip -c > "${merged_count}"
 
-      python "${params.HOME_REPO}/py/count2h5ad.py" "${merged_readCount}" "${merged_readCount_h5ad}"
-
-      zcat $umiCount_files | awk 'FNR!=1 && \$1=="gene" {next;}{print}' | gzip -c > "${merged_umiCount}"
-      
-      python "${params.HOME_REPO}/py/count2h5ad.py" "${merged_umiCount}" "${merged_umiCount_h5ad}"
+      python "${params.HOME_REPO}/py/count2h5ad.py" "${merged_count}" "${merged_count_h5ad}"
 
 
       """
   stub:
-      merged_readCount_h5ad = "${file_header}"+'_merged_readCount.h5ad'
-      merged_umiCount_h5ad = "${file_header}"+'_merged_umiCount.h5ad'
-      // merged_readCount = "${file_header}"+'_merged_readCount.txt.gz'
-      // merged_umiCount = "${file_header}"+'_merged_umiCount.txt.gz'
+      merged_count_h5ad = "${file_header}"+'_merged.h5ad'
 
       """
-      touch "${merged_readCount_h5ad}"
-      touch "${merged_umiCount_h5ad}"
+      touch "${merged_count_h5ad}"
       """
 }

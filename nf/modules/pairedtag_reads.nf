@@ -81,10 +81,10 @@ process add_tags {
   conda params.HOME_REPO + '/nf/envs/bwa.yaml'
   
   input:
-    tuple val(alignment_id), file(bam_file)
+    tuple val(alignment_id), file(bam_file), val(keyvalues)
 
   output:
-    tuple val(alignment_id), file(annot_bam_file)
+    tuple val(alignment_id), file(annot_bam_file), val(keyvalues)
 
   script:
     unsorted_bam = bam_file.simpleName - '.bam' + '_tag_uns.bam'

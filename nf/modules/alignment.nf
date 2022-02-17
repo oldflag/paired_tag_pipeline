@@ -19,14 +19,14 @@ process star_aligner_single {
   conda params.HOME_REPO + '/nf/envs/star.yaml'
   
     input:
-      tuple val(sequence_id), file(fastq_trimmed1)
+      tuple val(sequence_id), file(fastq_trimmed1), val(keyvalues)
       
 
     output:
-      tuple val(sequence_id), file(outbam)
+      tuple val(sequence_id), file(outbam), val(keyvalues)
 
   script: 
-    prefix = "${sequence_id}" + '_' + fastq_trimmed1.simpleName
+    prefix = fastq_trimmed1.simpleName
     outbam = prefix + 'Aligned.sortedByCoord.out.bam'
     input_fq1 = "${fastq_trimmed1}"
 
@@ -44,7 +44,7 @@ process star_aligner_single {
     """
 
   stub:
-    prefix = "${sequence_id}" + '_' + fastq_trimmed1.simpleName
+    prefix = fastq_trimmed1.simpleName
     outbam = prefix + 'Aligned.sortedByCoord.out.bam'
     """
     touch "${outbam}"
@@ -68,15 +68,15 @@ process bwa_aligner_single {
   conda params.HOME_REPO + '/nf/envs/bwa.yaml'
 
   input:
-    tuple val(sequence_id), file(fq_file)
+    tuple val(sequence_id), file(fq_file), val(keyvalues)
 
   output:
-    tuple val(alignment_id), file(aln_bam)
+    tuple val(sequence_id), file(aln_bam), val(keyvalues)
 
   script:
     fq_pfx = fq_file.simpleName
-    alignment_id = "${sequence_id}_${fq_pfx}"
-    aln_bam = "${sequence_id}_${fq_pfx}.bam"
+    // alignment_id = "${sequence_id}_${fq_pfx}"
+    aln_bam = "${fq_pfx}.bam"
     """
     bwa mem -t "${params.alignment_ncore}" "${params.genome_reference}" "${fq_file}" | samtools view -hb > "${aln_bam}"
     d=\$(samtools view "${aln_bam}" | head -n 10 | wc -l)
@@ -87,8 +87,8 @@ process bwa_aligner_single {
 
   stub:
     fq_pfx = fq_file.simpleName
-    alignment_id = "${sequence_id}_${fq_pfx}"
-    aln_bam = "${sequence_id}_${fq_pfx}.bam"
+    // alignment_id = "${sequence_id}_${fq_pfx}"
+    aln_bam = "${fq_pfx}.bam"
     """
     touch "${aln_bam}"
     """
@@ -107,21 +107,23 @@ process merge_bams {
   conda params.HOME_REPO + '/nf/envs/bwa.yaml'
 
   input:
-    file bam_file
-    val base_name
+    tuple file(bam_file), val(base_name1), val(base_name2)
 
   output:
-    tuple val(base_name), file(merged_bam)
+    tuple file(merged_bam), val(base_name1), val(base_name2)
 
   script:
     bamlist = bam_file.join('\n')
-    merged_bam = base_name + '.bam'
+    base_name = base_name1+base_name2
+    merged_bam = base_name+ '.bam'
     """
     echo "${bamlist}" > bamlist.txt
     samtools merge -b bamlist.txt "${merged_bam}"
     """
 
   stub:
+    bamlist = bam_file.join('\n')
+    base_name = base_name1+base_name2
     merged_bam = base_name + '.bam'
     """
     touch "${merged_bam}"
