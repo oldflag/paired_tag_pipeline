@@ -17,7 +17,7 @@ process MACS2_peakcall {
   conda params.HOME_REPO  + '/nf/envs/macs2.yaml'
 
   input:
-    tuple file(bam_file), val(experiment_name),  val(antibody_name)
+    tuple file(bam_file), val(experiment_name), val(antibody_name)
 
   output:
     tuple val(experiment_name), file(merged_peaks), file(peaks_saf)

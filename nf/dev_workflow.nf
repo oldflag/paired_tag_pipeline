@@ -5,19 +5,19 @@ nextflow.enable.dsl=2
  */
 
 // CHANGE THIS FILE TO RUN DIFFERENT SAMPLES THROUGH THE PIPELINE
-// the digest_file is a csv of the form <sequence_id>,<read1_fq>,<read2_fq>,key1=value1;key2=value2;<etc>
+// the digest_file is a csv of the form <sequence_id>,<library_type>,<fastq1>,<fastq2>
 // and drives the run of the pipeline
 
-// DIGEST = file('run_digest.csv')
 
 // general parameters
 params.RUN_NAME = 'dev-workflow-run'
-params.HOME_REPO = '/home/app.dev1/repos/pipelines/'
+params.HOME_REPO = '/home/chartl/repos/pipelines/'
 params.py_dir = params.HOME_REPO + 'py/'
 
 // input and output
-DIGEST = file(params.HOME_REPO + '/ex/run_digest.csv')
-params.output_dir = '/home/app.dev1/unittest2/result/'
+LIBRARY_DIGEST = file(params.HOME_REPO + '/ex/example_library_digest.csv')
+SAMPLE_DIGEST = file(params.HOME_REPO + '/ex/sample_library_digest.csv')
+params.output_dir = '/NAS1/test_runs/2022-02-20/'
 
 
 // parameters of R1 trimming
@@ -27,8 +27,8 @@ params.trim_qual = 20
 
 // parameters of R2 parsing
 params.linker_file = file(params.HOME_REPO + '/config/linkers.fa')
-params.sample_barcodes = file(params.HOME_REPO +  '/config/sample_barcode_4bp.fa')
 params.combin_barcodes = file(params.HOME_REPO + '/config/well_barcode_7bp.fa')
+params.sample_barcodes = SAMPLE_DIGEST  /* now BCs are exported from LIMS file(params.HOME_REPO +  '/config/sample_barcode_4bp.fa') */
 params.umi_len = 10
 params.r2_parse_threads = 4
 
@@ -63,12 +63,12 @@ include { publishData as publishdnabam; publishData as publishrnabam;
           publishData as publishdnapeakreadcount; publishData as publishdnapeakumicount } from params.HOME_REPO + '/nf/modules/publish' 
 
 /* channel over rows of the digest */
-read1_ch = Channel.fromPath(DIGEST).splitCsv(header: true, sep: ',')
-             .map{ row -> tuple(row.sequence_id, file(row.read1)) }
-read2_ch = Channel.fromPath(DIGEST).splitCsv(header: true, sep: ',')
-             .map{ row -> tuple(row.sequence_id, file(row.read2)) }
-kv_ch = Channel.fromPath(DIGEST).splitCsv(header:true, sep: ',')
-             .map{ row -> tuple(row.sequence_id, row.keyvalues) }
+read1_ch = Channel.fromPath(LIBRARY_DIGEST).splitCsv(header: true, sep: ',')
+             .map{ row -> tuple(row.sequence_id, file(row.fastq1)) }
+read2_ch = Channel.fromPath(LIBRARY_DIGEST).splitCsv(header: true, sep: ',')
+             .map{ row -> tuple(row.sequence_id, file(row.fastq2)) }
+type_ch = Channel.fromPath(LIBRARY_DIGEST).splitCsv(header:true, sep: ',')
+             .map{ row -> tuple(row.sequence_id, row.library_type) }
 
 workflow {
   
@@ -76,22 +76,20 @@ workflow {
   trimmed_reads = trim_fq_single(read1_ch)
   trim_bc_join = trimmed_reads.map{ r -> tuple(r[0], r[1]) }.join(parsed_barcodes)
   run_fastqs = split_annot_r1(trim_bc_join)
-  // we have to join the two outputs into a single one
-  // add indexes
-  i=0
-  j=0
-  fastq_ids = run_fastqs[0].map{ it -> [i++, it] }
-  fastq_subfiles = run_fastqs[1].map{ it -> [j++, it]}
-  // join them
-  fqjoin = fastq_ids.join(fastq_subfiles).map{ it -> tuple(it[1], it[2])}
-  fqjoin = fqjoin.join(kv_ch).map{ it -> tuple(it[0], it[2], it[1])}
-  fqjoin = fqjoin.transpose()
+   i=0
+   j=0
+   fastq_ids = run_fastqs[0].map{ it -> [i++, it] }
+   fastq_subfiles = run_fastqs[1].map{ it -> [j++, it]}
+   // join them
+   fqjoin = fastq_ids.join(fastq_subfiles).map{ it -> tuple(it[1], it[2])}
+   fqjoin = fqjoin.join(type_ch).map{ it -> tuple(it[0], it[2], it[1])}
+   fqjoin = fqjoin.transpose()
 
-  //split into DNA and RNA 
-  rna_fq = fqjoin.filter{ it[1] =~ /type=rna/ }.map{it -> tuple(it[0], it[2], it[1])}
-  dna_fq = fqjoin.filter{ it[1] =~ /type=dna/ }.map{it -> tuple(it[0], it[2], it[1])}
+   //split into DNA and RNA
+   rna_fq = fqjoin.filter{ it[1] =~ /rna/ }.map{it -> tuple(it[0], it[2], it[1])}
+   dna_fq = fqjoin.filter{ it[1] =~ /dna/ }.map{it -> tuple(it[0], it[2], it[1])}
   
-  //alignment
+  //alignment - this will produce a channel of (seq_id, bamfile, seq_type, assay_id, antibody_name)
   dna_rawbam = bwa_aligner_single(dna_fq)
   rna_rawbam = star_aligner_single(rna_fq)
   
@@ -106,19 +104,21 @@ workflow {
   rna_withGN = rna_annot(rna_tagged,
                          tuple(params.genome_bin_file, 'SAF', 'BN'),
                          tuple(params.genome_gtf_file, 'GTF', 'GN'))
+  dna_withGN[0].subscribe{println it}
   
   // read and umi count with umi_tools based on a given tag
   dna_counts = dna_count(dna_withGN[0], 'BN')
   rna_counts = rna_count(rna_withGN[0], 'GN')
   
   /* Peak calling with anibodies */
-  // grouping by antibody
-  dna_withGN_ab = dna_withGN[0].map{ it -> tuple(it[2].split(/;/)[1], it[1])}.groupTuple()
+  // grouping by antibody - this is the 5th element of the tuple
+  dna_withGN_ab = dna_withGN[0].map{ it -> tuple(it[4], it[1])}.groupTuple()
+  dna_withGN_ab.subscribe{println it}
   // merging bams per antibody
-  dna_mg = merge_dnabams(dna_withGN_ab.map{it -> tuple(it[1].collect(), params.RUN_NAME+'_dna', it[0])})
+  dna_mg = merge_dnabams(dna_withGN_ab.map{it -> tuple(it[1].collect(), params.RUN_NAME+'_dna_', it[0])})
   // peak calling per antibody and adding antibody name to peak name
   dna_peaks = MACS2_peakcall(dna_mg)
-  // combining all peak calling
+  // combining all peak calling  @hklim  do we want to do this?
   merged_saf = merge_saf(dna_peaks.map{it -> it[2]}.collect(), "all_antibodies")
   // peak annotation
   dna_withPeak = peak_annot(dna_withGN[0].map{it -> tuple(it[0], it[1])},
@@ -130,8 +130,6 @@ workflow {
   // merge annotated bams
   annodna_mg = merge_annodnabams(dna_withPeak[0].map{ it -> tuple(it[2].collect(),params.RUN_NAME + '_anno_', 'dna')})
   annorna_mg = merge_annornabams(rna_withGN[0].map{ it -> tuple(it[1].collect(), params.RUN_NAME + '_anno_', 'rna')})
-  
- 
   
    // merge DNA read and umi counts
   dna_read_merged_h5ad = dna_merge_read(dna_counts[0].map{ it -> tuple(it[3].collect(),"DNA_read")})
@@ -155,6 +153,5 @@ workflow {
   publishrnaumicount(rna_umi_merged_h5ad)
   publishdnapeakreadcount(peak_read_merged_h5ad)
   publishdnapeakumicount(peak_umi_merged_h5ad)
-
 }
   

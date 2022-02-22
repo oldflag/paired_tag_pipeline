@@ -19,16 +19,18 @@ process star_aligner_single {
   conda params.HOME_REPO + '/nf/envs/star.yaml'
   
     input:
-      tuple val(sequence_id), file(fastq_trimmed1), val(keyvalues)
+      tuple val(sequence_id), file(fastq_trimmed1), val(seqtype)
       
 
     output:
-      tuple val(sequence_id), file(outbam), val(keyvalues)
+      tuple val(sequence_id), file(outbam), val(seqtype), val(assay), val(antibody)
 
   script: 
     prefix = fastq_trimmed1.simpleName
     outbam = prefix + 'Aligned.sortedByCoord.out.bam'
     input_fq1 = "${fastq_trimmed1}"
+    assay = input_fq1.split("__")[1]
+    antibody = input_fq1.split("__")[2]
 
     """
     STAR --readFilesIn $input_fq1 \\
@@ -46,6 +48,9 @@ process star_aligner_single {
   stub:
     prefix = fastq_trimmed1.simpleName
     outbam = prefix + 'Aligned.sortedByCoord.out.bam'
+    input_fq1 = "${fastq_trimmed1}"
+    assay = input_fq1.split("__")[1]
+    antibody = input_fq1.split("__")[2]
     """
     touch "${outbam}"
     """
@@ -68,15 +73,18 @@ process bwa_aligner_single {
   conda params.HOME_REPO + '/nf/envs/bwa.yaml'
 
   input:
-    tuple val(sequence_id), file(fq_file), val(keyvalues)
+    tuple val(sequence_id), file(fq_file), val(seqtype)
 
   output:
-    tuple val(sequence_id), file(aln_bam), val(keyvalues)
+    tuple val(sequence_id), file(aln_bam), val(seqtype), val(assay), val(antibody)
 
   script:
     fq_pfx = fq_file.simpleName
     // alignment_id = "${sequence_id}_${fq_pfx}"
     aln_bam = "${fq_pfx}.bam"
+    seqid = fq_pfx.split("__")[0]
+    assay = fq_pfx.split("__")[1]
+    antibody = fq_pfx.split("__")[2]
     """
     bwa mem -t "${params.alignment_ncore}" "${params.genome_reference}" "${fq_file}" | samtools view -hb > "${aln_bam}"
     d=\$(samtools view "${aln_bam}" | head -n 10 | wc -l)
@@ -89,6 +97,9 @@ process bwa_aligner_single {
     fq_pfx = fq_file.simpleName
     // alignment_id = "${sequence_id}_${fq_pfx}"
     aln_bam = "${fq_pfx}.bam"
+    seqid = fq_pfx.split("__")[0]
+    assay = fq_pfx.split("__")[1]
+    antibody = fq_pfx.split("__")[2]
     """
     touch "${aln_bam}"
     """

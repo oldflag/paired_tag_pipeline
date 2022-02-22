@@ -11,7 +11,7 @@
  * ---------------------------
  *  + py_dir: path to the root python directory of the 'pipelines' repo
  *  + combin_barcodes: path to the combinatorial ("well") barcodes sequence file
- *  + sample_barcodes: path to the sample barcodes sequence file
+ *  + sample_barcodes: path to the sample barcodes sequence file - may be a fasta or csv
  *  + linker_file: path to the linker sequence file
  *  + r2_parse_threads: number of threads to use
  *  + umi_len: the UMI length
@@ -64,16 +64,16 @@ process split_annot_r1 {
   script:
     """
     mkdir -p out
-    python "${params.py_dir}/annotate_split_R1.py" "${r1_trim_fq}" "${barcode_csv}" "${params.combin_barcodes}" "${params.sample_barcodes}" --outdir out
+    python "${params.py_dir}/annotate_split_R1.py" "${r1_trim_fq}" "${barcode_csv}" "${params.combin_barcodes}" "${params.sample_barcodes}" --outdir out --sequence_id "${sequence_id}"
     """
 
   stub:
     """
     mkdir -p out
-    touch "out/${sequence_id}_1.fq.gz"
-    touch "out/${sequence_id}_2.fq.gz"
-    touch "out/${sequence_id}_3.fq.gz"
-    touch "out/${sequence_id}_4.fq.gz"
+    touch "out/${sequence_id}__assay01__ab01__1.fq.gz"
+    touch "out/${sequence_id}__assay02__ab01__2.fq.gz"
+    touch "out/${sequence_id}__assay01__ab01__3.fq.gz"
+    touch "out/${sequence_id}__assay02__ab02__4.fq.gz"
     """
 }
 
@@ -81,10 +81,10 @@ process add_tags {
   conda params.HOME_REPO + '/nf/envs/bwa.yaml'
   
   input:
-    tuple val(alignment_id), file(bam_file), val(keyvalues)
+    tuple val(alignment_id), file(bam_file), val(seqtype), val(assay_id), val(antibody)
 
   output:
-    tuple val(alignment_id), file(annot_bam_file), val(keyvalues)
+    tuple val(alignment_id), file(annot_bam_file), val(seqtype), val(assay_id), val(antibody)
 
   script:
     unsorted_bam = bam_file.simpleName - '.bam' + '_tag_uns.bam'

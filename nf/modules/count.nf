@@ -74,7 +74,7 @@ process annotate_reads_with_features {
 process umitools_count {
   conda params.HOME_REPO + '/nf/envs/umi_tools.yaml'
   input:
-      tuple val(sequence_id), file(annot_bam), val(keyvalues)
+      tuple val(sequence_id), file(annot_bam), val(seqtype), val(assay_id), val(antibody)
       val count_tag
 
   output:
@@ -131,12 +131,12 @@ process umitools_count {
 process annotate_multiple_features {
   conda params.HOME_REPO + '/nf/envs/featurecounts.yaml'
   input:
-    tuple val(sequence_id), file(bam_file), val(keyvalues)
+    tuple val(sequence_id), file(bam_file), val(seqtype), val(assay_id), val(antibody)
     tuple file(annotation_file1), val(annotation_type1), val(destination_tag1)
     tuple file(annotation_file2), val(annotation_type2), val(destination_tag2)
 
   output:
-    tuple val(sequence_id), file(merged_bam), val(keyvalues)
+    tuple val(sequence_id), file(merged_bam), val(seqtype), val(assay_id), val(antibody)
     tuple file(fc_log), file(merge_log)
 
   script:

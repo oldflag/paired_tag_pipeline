@@ -33,10 +33,11 @@ mappings (provided as fasta files).
 
 """
 from argparse import ArgumentParser
-from utils import read_fasta, read_fastq, xopen
+from utils import read_fasta, read_fastq, xopen, fasta_record
 from skbio.alignment import StripedSmithWaterman
 from multiprocessing import Pool
 from itertools import islice
+from csv import DictReader
 
 RE_LENGTH = 8
 
@@ -46,7 +47,7 @@ def get_args():
     parser = ArgumentParser('PairedTag_R2_Parser')
     parser.add_argument('R2_fastq', help='The R2 fastq file')
     parser.add_argument('well_bc', help='The well barcode fasta file')
-    parser.add_argument('sample_bc', help='The sample barcode fasta file')
+    parser.add_argument('sample_bc', help='The sample barcode fasta file OR sample digest file (.csv)')
     parser.add_argument('linkers', help='The linker fasta file')
     parser.add_argument('output', help='The output .csv linking read name to disambiguated barcode')
     parser.add_argument('--threads', help='The number of threads to use', default=1, type=int)
@@ -196,10 +197,16 @@ def extract_barcodes(seq, linker1, linker2, lumi, lbc, lsn, lln):
 
     bc2 = seq[(l2['target_begin']-lbc):l2['target_begin']]
     eol2 = l2['target_begin'] + lln
-    tbase = seq[eol2 + 1]
-    eol2 += 1
-    sbc = seq[eol2:(eol2 + lsn)]
-    res = seq[(eol2+lsn):(eol2+lsn+RE_LENGTH)]
+    if eol2 + 1>= len(seq):
+        # the read truncates on or after barcode 2
+        tbase = 'N'
+        sbc = 'N' 
+        res = 'N' * RE_LENGTH
+    else:
+        tbase = seq[eol2 + 1]
+        eol2 += 1
+        sbc = seq[eol2:(eol2 + lsn)]
+        res = seq[(eol2+lsn):(eol2+lsn+RE_LENGTH)]
 
     return umi, bc1, bc2, sbc, tbase + res
 
@@ -260,7 +267,7 @@ def parse_R2_barcodes(read, sw_l1, sw_l2, umi_bp, bc_bp, sn_bp,
     # the ers string consists of [typebp][RE seq]
     # if typebp is A, it is dna; T for rna; fallback is to use
     # the restriction enzyme sequence CCTGCAGG (dna) and GCGGCCGC (rna)
-    tr_ers = 'dna' if 'TCGA' in ers else 'rna' if 'GGCC' in ers else 'unk'
+    tr_ers = 'rna' if 'TCGA' in ers else 'dna' if 'GGCC' in ers else 'unk'
 
     return (read.name, f'{tr_umi}:{tr_bc1}:{tr_bc2}:{tr_sbc}:{tr_ers}',
             f'{umi}:{bc1}:{bc2}:{sbc}:{ers}')
@@ -279,11 +286,26 @@ def rescue(seq, seqmap):
 
     return '*'
 
+def basename(fn):
+    return fn.split('/')[-1]
+
+
+def get_sample_seqs(fasta_or_digest, input_fastq):
+    if fasta_or_digest[-4:] == '.csv':
+        records = DictReader(open(fasta_or_digest))
+        print(records)
+        records = [r for r in records if basename(r['fastq2']) == basename(input_fastq)]
+        print(records)
+        return [fasta_record(r['assay_id'], r['barcode']) for r in records] 
+    else:
+        return list(read_fasta(fasta_or_digest))
+
 
 def main(args):
     linker_seqs = list(read_fasta(args.linkers))
-    sample_seqs = list(read_fasta(args.sample_bc))
     combin_seqs = list(read_fasta(args.well_bc))
+    sample_seqs = get_sample_seqs(args.sample_bc, args.R2_fastq)
+    print(sample_seqs)
 
     check_args(args, linker_seqs, sample_seqs, combin_seqs)
 
@@ -311,14 +333,6 @@ def main(args):
 
     if args.threads > 1:
         pool.close()
-
-    
-
-
-
-
-
-
 
 
 
