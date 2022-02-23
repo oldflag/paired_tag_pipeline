@@ -215,7 +215,6 @@ process annotate_multiple_features {
 
 process merge_counts {
   
-  
   conda params.HOME_REPO + '/nf/envs/umi_tools.yaml'
 
   input:
@@ -229,6 +228,8 @@ process merge_counts {
       merged_count = "${file_header}"+'_merged.txt.gz'
       
       // assume each count file has a header starting with "gene" column name
+      println("count files is "+count_files.toString())
+      println("Header is "+file_header.toString())
       """
       zcat $count_files | awk 'FNR!=1 && \$1=="gene" {next;}{print}' | gzip -c > "${merged_count}"
 

@@ -16,6 +16,7 @@ import numpy as np
 from utils import xopen
 from collections import OrderedDict
 
+
 def get_args():
     parser = ArgumentParser('count2h5')
     parser.add_argument('counts', help='Output 3-column counts file (e.g. from UMI count)')
@@ -25,8 +26,7 @@ def get_args():
 
 
 def get_sid(bc_string):
-    i = bc_string.index('SM')
-    return bc_string[i:]
+    return bc_string.split('.')[-1]
 
 
 def main(args):

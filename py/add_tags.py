@@ -81,7 +81,7 @@ def transform_read(read, read_n, sbc_rg_map):
     rawname, parsed, full = read.query_name.split('|')
     read.set_tag('CR', full)
     read.set_tag('BC', full.split(':')[-2])
-    read.set_tag('CB', ''.join(parsed.split(':')[1:4]))
+    read.set_tag('CB', '.'.join(parsed.split(':')[1:4]))
     read.set_tag('RG', sbc_rg_map[parsed.split(':')[-2]])
     umi = parsed.split(':')[0]
     if umi != '*':

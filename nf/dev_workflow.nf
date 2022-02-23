@@ -16,7 +16,7 @@ params.py_dir = params.HOME_REPO + 'py/'
 
 // input and output
 LIBRARY_DIGEST = file(params.HOME_REPO + '/ex/example_library_digest.csv')
-SAMPLE_DIGEST = file(params.HOME_REPO + '/ex/sample_library_digest.csv')
+SAMPLE_DIGEST = file(params.HOME_REPO + '/ex/zhu2020_sample_digest.csv')
 params.output_dir = '/NAS1/test_runs/2022-02-20/'
 
 
@@ -70,6 +70,7 @@ read2_ch = Channel.fromPath(LIBRARY_DIGEST).splitCsv(header: true, sep: ',')
 type_ch = Channel.fromPath(LIBRARY_DIGEST).splitCsv(header:true, sep: ',')
              .map{ row -> tuple(row.sequence_id, row.library_type) }
 
+
 workflow {
   
   parsed_barcodes = parse_pairedtag_r2(read2_ch)
@@ -94,8 +95,8 @@ workflow {
   rna_rawbam = star_aligner_single(rna_fq)
   
   //filtering and tagging
-  dna_tagged = tag1(dna_rawbam.filter{ ! it[1].simpleName.contains('trimmed_unlinked') })
-  rna_tagged = tag2(rna_rawbam.filter{ ! it[1].simpleName.contains('trimmed_unlinked') })
+  dna_tagged = tag1(dna_rawbam.filter{ ! it[1].simpleName.contains('_unlinked') })
+  rna_tagged = tag2(rna_rawbam.filter{ ! it[1].simpleName.contains('_unlinked') })
   
   // Bin and genome element/gene annotation with featurecounts
   dna_withGN = dna_annot(dna_tagged,
@@ -104,7 +105,6 @@ workflow {
   rna_withGN = rna_annot(rna_tagged,
                          tuple(params.genome_bin_file, 'SAF', 'BN'),
                          tuple(params.genome_gtf_file, 'GTF', 'GN'))
-  dna_withGN[0].subscribe{println it}
   
   // read and umi count with umi_tools based on a given tag
   dna_counts = dna_count(dna_withGN[0], 'BN')
@@ -113,11 +113,11 @@ workflow {
   /* Peak calling with anibodies */
   // grouping by antibody - this is the 5th element of the tuple
   dna_withGN_ab = dna_withGN[0].map{ it -> tuple(it[4], it[1])}.groupTuple()
-  dna_withGN_ab.subscribe{println it}
   // merging bams per antibody
   dna_mg = merge_dnabams(dna_withGN_ab.map{it -> tuple(it[1].collect(), params.RUN_NAME+'_dna_', it[0])})
   // peak calling per antibody and adding antibody name to peak name
   dna_peaks = MACS2_peakcall(dna_mg)
+
   // combining all peak calling  @hklim  do we want to do this?
   merged_saf = merge_saf(dna_peaks.map{it -> it[2]}.collect(), "all_antibodies")
   // peak annotation
@@ -128,21 +128,34 @@ workflow {
   peak_counts = peak_count(dna_withPeak[0].map{it -> tuple(it[0], it[2], '')}, 'XT')
 
   // merge annotated bams
-  annodna_mg = merge_annodnabams(dna_withPeak[0].map{ it -> tuple(it[2].collect(),params.RUN_NAME + '_anno_', 'dna')})
-  annorna_mg = merge_annornabams(rna_withGN[0].map{ it -> tuple(it[1].collect(), params.RUN_NAME + '_anno_', 'rna')})
+  // note that it[1] here is always 'peaks'
+  dna_mg_input = dna_withPeak[0].map{it -> tuple(it[1], it[0], it[1], it[2])}.groupTuple().map{
+     it -> tuple(it[3].collect(), params.RUN_NAME + '_anno_', 'dna')
+  }
+  annodna_mg = merge_annodnabams(dna_mg_input)
+  rna_mg_input = rna_withGN[0].map{it -> tuple(it[2], it[0], it[1], it[2])}.groupTuple().map{
+     it -> tuple(it[2].collect(), params.RUN_NAME + '_anno_', 'rna')
+  }
+  annorna_mg = merge_annornabams(rna_mg_input)
   
-   // merge DNA read and umi counts
-  dna_read_merged_h5ad = dna_merge_read(dna_counts[0].map{ it -> tuple(it[3].collect(),"DNA_read")})
-  dna_umi_merged_h5ad = dna_merge_umi(dna_counts[0].map{ it -> tuple(it[2].collect(),"DNA_umi")})
+  // merge DNA read and umi counts
+  read_input = dna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[4].collect(), 'DNA_read')}
+  umi_input = dna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[3].collect(), 'DNA_umi')}
+  dna_read_merged_h5ad = dna_merge_read(read_input)
+  dna_umi_merged_h5ad = dna_merge_umi(umi_input)
   
   
   // merge RNA read and umi counts
-  rna_read_merged_h5ad = rna_merge_read(rna_counts[0].map{ it -> tuple(it[3].collect(),"RNA_read")})
-  rna_umi_merged_h5ad = rna_merge_umi(rna_counts[0].map{ it -> tuple(it[2].collect(),"RNA_umi")})
+  r_read_input = rna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[4].collect(), 'RNA_read')}
+  r_umi_input = rna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[3].collect(), 'RNA_umi')}
+  rna_read_merged_h5ad = rna_merge_read(r_read_input)
+  rna_umi_merged_h5ad = rna_merge_umi(r_umi_input)
   
   // merge Peak read and umi counts
-  peak_read_merged_h5ad = peak_merge_read(peak_counts[0].map{ it -> tuple(it[3].collect(),"PEAK_read")})
-  peak_umi_merged_h5ad = peak_merge_umi(peak_counts[0].map{ it -> tuple(it[2].collect(),"PEAK_umi")})
+  p_read_input = peak_counts[0].map{ it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[4].collect(), 'dna_peak_read')}
+  p_umi_input = peak_counts[0].map{ it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[3].collect(), 'dna_peak_umi')}
+  peak_read_merged_h5ad = peak_merge_read(p_read_input)
+  peak_umi_merged_h5ad = peak_merge_umi(p_umi_input)
   
   // publish results
   publishdnabam(annodna_mg[0].map{ it -> it[0]})
