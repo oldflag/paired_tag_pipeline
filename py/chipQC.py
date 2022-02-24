@@ -56,7 +56,7 @@ def getUMI(read):
 def group_umi(reads):
     rbg = defaultdict(list)
     for read in reads:
-        grp = (read.get_tag('CB'), getUMI(read))
+        grp = (read.get_tag('RG'), read.get_tag('CB'), getUMI(read))
         rbg[grp].append(read)
     return rbg
 
@@ -155,7 +155,7 @@ def div_(a, b):
 def compute_sample_stats(cell_stats):
     sample_stats = dict()
     for fc in cell_stats:
-        cell, sample = fc.rsplit('.', 1)
+        sample, cell = fc.split('.', 1)
         good_reads = cell_stats[fc]['retained']['in_peak']['reads'] + \
                      cell_stats[fc]['retained']['off_target']['reads']
         good_umi = cell_stats[fc]['retained']['in_peak']['umi'] + \
@@ -192,21 +192,34 @@ def compute_sample_stats(cell_stats):
         for key in sample_stats[sample]:
             cell_values = sample_stats[sample][key]
             nobs = len(cell_values)
-            cell_values = [x for x, c in zip(cell_values, umi_vec) if c >= 1000]
-            m = sum(cell_values)/len(cell_values)
+            cell_values = [x for x, c in zip(cell_values, umi_vec) if c >= 750]
+            m = div_(sum(cell_values), len(cell_values))
             vsorted = sorted(cell_values)
             i_25, i_50, i_75 = int(0.25*len(cell_values)), int(0.5*len(cell_values)), int(0.75*len(cell_values))
-            sample_vals[sample][key] = {
-               'n_cell': nobs,
-               'n_well_covered': len(cell_values),
-               'min': min(cell_values),
-               'Q25': vsorted[i_25],
-               'median': vsorted[i_50],
-               'Q75': vsorted[i_75],
-               'max': max(cell_values),
-               'mean': m,
-               'std': sum(((x-m)**2 for x in cell_values))/len(cell_values)
-            }
+            if len(cell_values) > 0:
+                sample_vals[sample][key] = {
+                   'n_cell': nobs,
+                   'n_well_covered': len(cell_values),
+                   'min': min(cell_values),
+                   'Q25': vsorted[i_25],
+                   'median': vsorted[i_50],
+                   'Q75': vsorted[i_75],
+                   'max': max(cell_values),
+                   'mean': m,
+                   'std': sum(((x-m)**2 for x in cell_values))/len(cell_values)
+                }
+            else:
+                sample_vals[sample][key] = {
+                   'n_cell': nobs,
+                   'n_well_covered': 0,
+                   'min': 'NA',
+                   'Q25': 'NA',
+                   'median': 'NA',
+                   'Q75': 'NA',
+                   'max': 'NA',
+                   'mean': 'NA',
+                   'std': 'NA'
+                }
 
     return sample_vals
    
@@ -228,46 +241,49 @@ def main(args):
     for loc, umi_group in iter_umi(bam_hdl, args.verbose):
         ppeak = peak
         peak = next_peak(peak, loc, peak_iter, bam_hdl.references)
-        for (cell, umi), reads in umi_group.items():
+        for (libsample, cell, umi), reads in umi_group.items():
+            fcell = libsample + '.' + cell.rsplit('.',1)[0]
             if umi is None:
-                stat_counts[cell]['no_UMI']['reads'] += len(reads)
+                stat_counts[fcell]['no_UMI']['reads'] += len(reads)
                 continue
             u = False
             k2 = 'in_peak' if overlaps(reads[0], peak, bam_hdl.references) else 'off_target'
             for read in reads:
                 k1 = 'retained' if read.mapq >= 30 else 'filtered_MQ30'
-                stat_counts[cell][k1][k2]['reads'] += 1
+                stat_counts[fcell][k1][k2]['reads'] += 1
                 if k1 == 'retained' and u is False:
-                    stat_counts[cell][k1][k2]['umi'] += 1
+                    stat_counts[fcell][k1][k2]['umi'] += 1
                     u = True
             if u is False:
-                stat_counts[cell]['filtered_MQ30'][k2]['umi'] += 1
+                stat_counts[fcell]['filtered_MQ30'][k2]['umi'] += 1
     for read in bam_hdl:   # now just unmapped
         cell = read.get_tag('CB')
-        stat_counts[cell]['unmapped']['reads'] += 1
+        stat_counts[fcell]['unmapped']['reads'] += 1
                  
 
     with open(args.out, 'wt') as out:
-        out.write('sample\tcell\tfilter\ttarget\ttype\tcount\n')
+        out.write('sample_id\tlibrary\tsample\tcell\tfilter\ttarget\ttype\tcount\n')
         for fullcell in stat_counts:
-            cell, sample = fullcell.rsplit('.',1)
+            sample_id, cell = fullcell.split('.',1)
+            library, sample, antibody, _ = sample_id.split('__') 
             for k1 in ('retained', 'filtered_MQ30'):
                 for k2 in ('in_peak', 'off_target'):
                     for k3 in ('reads', 'umi'):
                         cct = stat_counts[fullcell][k1][k2][k3]
-                        out.write(f'{sample}\t{cell}\t{k1}\t{k2}\t{k3}\t{cct}\n')
+                        out.write(f'{sample_id}\t{library}\t{sample}\t{cell}\t{k1}\t{k2}\t{k3}\t{cct}\n')
             n_unmapped = stat_counts[fullcell]['unmapped']['reads']
-            out.write(f'{sample}\t{cell}\tunmapped\tNA\tNA\treads\t{n_unmapped}\n')
+            out.write(f'{sample_id}\t{library}\t{sample}\t{cell}\tunmapped\tNA\tNA\treads\t{n_unmapped}\n')
 
    
     if args.sample_out is not None:
         # compute per-sample statistics
         with open(args.sample_out, 'wt') as out:
-            out.write('sample\tfeature\tmetric\tvalue\n')
+            out.write('sample_id\tlibrary\tsample\tfeature\tmetric\tvalue\n')
             for sample_id, sample_stats in compute_sample_stats(stat_counts).items():
+                library, sample, antibody, _ = sample_id.split('__')
                 for k1, dct in sample_stats.items():
                     for k2, v in dct.items():
-                        out.write(f'{sample_id}\t{k1}\t{k2}\t{v}\n')
+                        out.write(f'{sample_id}\t{library}\t{sample}\t{k1}\t{k2}\t{v}\n')
 
 
 if __name__ == '__main__':
