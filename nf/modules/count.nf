@@ -16,9 +16,7 @@ nextflow.enable.dsl=2
 process annotate_reads_with_features {
   conda params.HOME_REPO + '/nf/envs/featurecounts.yaml'
   input:
-    tuple val(sequence_id), file(bam_file)
-    file annotation_file
-    val annotation_type  // 'GTF' or 'SAF'
+    tuple val(sequence_id), file(bam_file), file(annotation_file), val(annotation_type)  // annotation_type : 'SAF' or 'GTF'
     val annotation_name  // e.g., 'genes', 'enhancers', 'bins'
 
   output:
@@ -228,8 +226,6 @@ process merge_counts {
       merged_count = "${file_header}"+'_merged.txt.gz'
       
       // assume each count file has a header starting with "gene" column name
-      println("count files is "+count_files.toString())
-      println("Header is "+file_header.toString())
       """
       zcat $count_files | awk 'FNR!=1 && \$1=="gene" {next;}{print}' | gzip -c > "${merged_count}"
 

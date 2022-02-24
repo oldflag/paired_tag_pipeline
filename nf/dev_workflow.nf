@@ -56,7 +56,7 @@ include { annotate_multiple_features as rna_annot; umitools_count as rna_count;
 include { annotate_multiple_features as dna_annot; umitools_count as dna_count} from params.HOME_REPO + '/nf/modules/count'
 include { annotate_reads_with_features as peak_annot; umitools_count as peak_count } from params.HOME_REPO + '/nf/modules/count'
 include { merge_bams as merge_dnabams; merge_bams as merge_annodnabams; merge_bams as merge_annornabams } from params.HOME_REPO + '/nf/modules/alignment'
-include { MACS2_peakcall; merge_saf } from params.HOME_REPO + '/nf/modules/peaks'
+include { MACS2_peakcall; merge_saf; chip_qc } from params.HOME_REPO + '/nf/modules/peaks'
 include { publishData as publishdnabam; publishData as publishrnabam; 
           publishData as publishdnareadcount; publishData as publishdnaumicount; 
           publishData as publishrnareadcount; publishData as publishrnaumicount; 
@@ -118,12 +118,19 @@ workflow {
   // peak calling per antibody and adding antibody name to peak name
   dna_peaks = MACS2_peakcall(dna_mg)
 
-  // combining all peak calling  @hklim  do we want to do this?
-  merged_saf = merge_saf(dna_peaks.map{it -> it[2]}.collect(), "all_antibodies")
-  // peak annotation
-  dna_withPeak = peak_annot(dna_withGN[0].map{it -> tuple(it[0], it[1])},
-                            merged_saf,
-                            'SAF', 'peaks')
+  // bams come out as (bam, expname, antibody)
+  // peaks come out as (exp, bed, saf, antibody)
+  // desire: (antibody, expname, bam, saf)
+  bam_peak_ch = dna_peaks.map{ it -> tuple(it[3], it[0], it[2])}.join(
+                   dna_mg.map{it -> tuple(it[2], it[1], it[0])}).map{
+                     it -> tuple(it[1] + '_' + it[0], it[4], it[2], 'SAF')}
+
+  chip_qc = chip_qc(bam_peak_ch.map{ it -> tuple(it[0], it[1], it[2])})
+  dna_withPeak = peak_annot(bam_peak_ch, 'peaks')
+
+  // combining all peaks for publication
+  merged_saf = merge_saf(dna_peaks.map{it -> it[2]}.collect(), "all_antibodies")  
+  
   // read and umi count based on peaks
   peak_counts = peak_count(dna_withPeak[0].map{it -> tuple(it[0], it[2], '')}, 'XT')
 

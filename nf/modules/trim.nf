@@ -24,8 +24,6 @@ process trim_fq_single {
   script:
     trimmed_reads = "${sequence_id}_trimmed.fq.gz"
     trim_report = "${sequence_id}_trim_report.txt"
-    println('Sequence ID is ' + sequence_id)
-    println('FastQ File Is ' + fastq_file.simpleName)
     """
     cutadapt -a ${params.adapter_seq} -o ${trimmed_reads} -j ${params.trim_ncores} -q ${params.trim_qual} ${fastq_file} > ${trim_report}
     """
