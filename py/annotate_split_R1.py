@@ -33,12 +33,31 @@ def get_args():
     parser.add_argument('well_bc', help='The well barcode file (fasta)')
     parser.add_argument('sample_manifest', help='The sample manifest file, containing sample id, barcode, and antibody')
     parser.add_argument('--cells_per_fastq', help='The target # cells / fastQ for output', default=10000, type=int)
-    parser.add_argument('--estimated_cells', help='An estimate of the total # of cells', type=int, default=None)
+    parser.add_argument('--noestimate', help='Do not estimate total # of cells; compute exact numbers', action='store_true')
     parser.add_argument('--sequence_id', help='The sequence id. Defaults to the {this_thing}_R1.fastq.gz', default=None)
     parser.add_argument('--outdir', help='The output directory', default=None)
+    parser.add_argument('--min_rlen', help='Minimum R1 read length for output', default=30, type=int)
 
     return parser.parse_args()
 
+
+
+def compute_cells_per_sample(bcfile):
+    per_sample_umi = dict()
+    with xopen(bcfile, 'rt') as handle:
+        for entry in handle:
+            bcinfo = entry.split(',')[1]
+            if '*' not in bcinfo:
+                codes = bcinfo.split(':')                                                                                                                                                                                                                       # umi:bc1:bc2:sm:re
+                sample, cell, umi = codes[3], codes[1] + codes[2], codes[0]
+                if sample not in per_sample_umi:
+                    per_sample_umi[sample] = dict()
+                    per_sample_umi[sample][cell] = setadd(per_sample_umi[sample].get(cell, set()), codes[0])
+    n_samples = len(per_sample_umi)
+    cps = {sm: len(per_sample_umi[sample])
+           for sm in per_sample_umi}
+    total_cells = sum(cps.values())
+    return total_cells, n_samples, cps 
 
 
 def estimate_via_recapture(bcfile, n):
@@ -128,7 +147,7 @@ def get_group_map(pool_fasta, sample_digest_file, groups_per_sample, out_base, l
     for digest_record in digest_recs:
         assay_id, antibody = digest_record['assay_id'], digest_record['antibody_name']
         sample_out = list()
-        cpg = int(nw / groups_per_sample[digest_record['assay_id']])+1
+        cpg = int(nw / groups_per_sample.get(digest_record['assay_id'], 1))+1
         for i, group_list in enumerate(grouped_product([digest_record['assay_id']], 
                                        bc1_f, bc2_f, 
                                        n=cpg)):
@@ -162,10 +181,11 @@ def get_base(fn, pfx=None):
                
 
 def main(args):
-    if args.estimated_cells is None:
-        ncell, _, cell_per_sam = estimate_via_recapture(args.bc_csv, n=1200000)  # use 1.2M reads to estimate # of cells
+    print(args)
+    if args.noestimate:
+        ncell, _, cell_per_sam = compute_cells_per_sample(args.bc_csv)
     else:
-        ncell = args.estimated_cells
+        ncell, _, cell_per_sam = estimate_via_recapture(args.bc_csv, n=1200000)  # use 1.2M reads to estimate # of cells
 
 
     #n_groups = 1 + int(ncell / args.cells_per_fastq)
@@ -183,7 +203,7 @@ def main(args):
     with xopen(args.bc_csv, 'rt') as bcinput:
         bc_in = (x.strip().split(',') for x in bcinput)
 
-        for fq, bc in zip(fq_in, bc_in):
+        for nread, (fq, bc) in enumerate(zip(fq_in, bc_in)):
             # make sure that the names really do match
             assert fq.name.split()[0] == bc[0].split()[0], 'FastQ records and barcodes out of phase: %s' % repr((fq, bc))
             # place the barcode info into the name -- before any whitespace -- delimited by a |
@@ -200,8 +220,11 @@ def main(args):
                     handle = sample_only_handle
                 else:
                     handle = reject_handle
-            if len(fq.seq) > 0:
-                handle.write('@' + name + ' ' + sfx + '\n')
+            if len(fq.seq) >= args.min_rlen:
+                rname = '@' + name + ' ' + sfx
+                if len(rname) > 100:
+                    rname = f'read{1+nread}|{bc[1]}|{bc[2]}'
+                handle.write('@' + rname + '\n')
                 handle.write(fq.seq + '\n')
                 handle.write('+\n')
                 handle.write(fq.qual + '\n')
