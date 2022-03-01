@@ -52,9 +52,10 @@ include { trim_fq_single } from params.HOME_REPO + '/nf/modules/trim'
 include { parse_pairedtag_r2; split_annot_r1; add_tags as tag1; add_tags as tag2} from params.HOME_REPO + '/nf/modules/pairedtag_reads'
 include { star_aligner_single; bwa_aligner_single } from params.HOME_REPO + '/nf/modules/alignment'
 include { rnaseqc_call } from params.HOME_REPO + '/nf/modules/rnaseqc'
-include { annotate_multiple_features as rna_annot; umitools_count as rna_count; 
+include { annotate_multiple_features as rna_annot; umitools_count as rna_count; umitools_count as rna_bin_count;
           merge_counts as dna_merge_read; merge_counts as dna_merge_umi; 
-          merge_counts as rna_merge_read; merge_counts as rna_merge_umi;
+          merge_counts as rna_merge_read; merge_counts as rna_merge_umi; 
+          merge_counts as rna_merge_bin_read; merge_counts as rna_merge_bin_umi;
           merge_counts as peak_merge_read; merge_counts as peak_merge_umi } from params.HOME_REPO + '/nf/modules/count'
 include { annotate_multiple_features as dna_annot; umitools_count as dna_count} from params.HOME_REPO + '/nf/modules/count'
 include { annotate_reads_with_features as peak_annot; umitools_count as peak_count } from params.HOME_REPO + '/nf/modules/count'
@@ -63,6 +64,7 @@ include { MACS2_peakcall; merge_saf; chip_qc } from params.HOME_REPO + '/nf/modu
 include { publishData as publishdnabam; publishData as publishrnabam; 
           publishData as publishdnareadcount; publishData as publishdnaumicount; 
           publishData as publishrnareadcount; publishData as publishrnaumicount; 
+          publishData as publishrnabinreadcount; publishData as publishrnabinumicount;
           publishData as publishdnapeakreadcount; publishData as publishdnapeakumicount;
           publishData as publishrnaqc } from params.HOME_REPO + '/nf/modules/publish' 
 
@@ -113,9 +115,14 @@ workflow {
                          tuple(params.genome_bin_file, 'SAF', 'BN'),
                          tuple(params.genome_gtf_file, 'GTF', 'GN'))
   
-  // read and umi count with umi_tools based on a given tag
+  /* read and umi count with umi_tools based on a given tag */
+  // DNA read and umi count per cell 
   dna_counts = dna_count(dna_withGN[0], 'BN')
+  // RNA read and umi count per cell per gene
   rna_counts = rna_count(rna_withGN[0], 'GN')
+  // RNA read and umi count per cell  
+  rna_bin_counts = rna_bin_count(rna_withGN[0], 'BN')
+
   
   /* Peak calling with anibodies */
   // grouping by antibody - this is the 5th element of the tuple
@@ -152,23 +159,30 @@ workflow {
      it -> tuple(it[2].collect(), params.RUN_NAME + '_anno_', 'rna')
   }
   annorna_mg = merge_annornabams(rna_mg_input)
-
+  
   // merge DNA read and umi counts
-  read_input = dna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[4].collect(), 'DNA_read')}
-  umi_input = dna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[3].collect(), 'DNA_umi')}
+  read_input = dna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[4].collect(), 'DNA_Q30_aligned_READcount_percell')}
+  umi_input = dna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[3].collect(), 'DNA_Q30_aligned_UMIcount_percell')}
   dna_read_merged_h5ad = dna_merge_read(read_input)
   dna_umi_merged_h5ad = dna_merge_umi(umi_input)
   
   
-  // merge RNA read and umi counts
-  r_read_input = rna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[4].collect(), 'RNA_read')}
-  r_umi_input = rna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[3].collect(), 'RNA_umi')}
+  // merge RNA read and umi counts per cell per gene
+  r_read_input = rna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[4].collect(), 'RNA_Q30_aligned_READcount_percell_pergene')}
+  r_umi_input = rna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[3].collect(), 'RNA_Q30_aligned_UMIcount_percell_pergene')}
   rna_read_merged_h5ad = rna_merge_read(r_read_input)
   rna_umi_merged_h5ad = rna_merge_umi(r_umi_input)
+
+  // merge RNA read and umi counts per cell
+  r_bin_read_input = rna_bin_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[4].collect(), 'RNA_Q30_aligned_READcount_percell')}
+  r_bin_umi_input = rna_bin_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[3].collect(), 'RNA_Q30_aligned_UMIcount_percell')}
+  rna_bin_read_merged_h5ad = rna_merge_bin_read(r_bin_read_input)
+  rna_bin_umi_merged_h5ad = rna_merge_bin_umi(r_bin_umi_input)
+
   
   // merge Peak read and umi counts
-  p_read_input = peak_counts[0].map{ it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[4].collect(), 'dna_peak_read')}
-  p_umi_input = peak_counts[0].map{ it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[3].collect(), 'dna_peak_umi')}
+  p_read_input = peak_counts[0].map{ it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[4].collect(), 'DNA_Q30_aligned_READcount_percell_perpeak')}
+  p_umi_input = peak_counts[0].map{ it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[3].collect(), 'DNA_Q30_aligned_UMIcount_percell_perpeak')}
   peak_read_merged_h5ad = peak_merge_read(p_read_input)
   peak_umi_merged_h5ad = peak_merge_umi(p_umi_input)
   
@@ -184,6 +198,8 @@ workflow {
 
   //publish QCs 
   publishrnaqc(rnaqc.map{it -> it[3]})
+  publishrnabinreadcount(rna_bin_read_merged_h5ad)
+  publishrnabinumicount(rna_bin_umi_merged_h5ad)
 
 }
   
