@@ -1,0 +1,8 @@
+name: rseqc
+channels:
+  - defaults
+  - bioconda
+dependencies:
+  - rseqc
+  - rna-seqc
+prefix: /home/app.dev1/anaconda3/envs/rseqc
