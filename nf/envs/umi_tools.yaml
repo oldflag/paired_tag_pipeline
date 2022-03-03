@@ -4,6 +4,7 @@ channels:
   - bioconda
   - conda-forge
 dependencies:
+  - openssl=1.0
   - samtools
   - umi_tools
   - anndata
