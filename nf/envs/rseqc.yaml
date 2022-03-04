@@ -1,5 +1,6 @@
 name: rseqc
 channels:
+  - conda-forge
   - defaults
   - bioconda
 dependencies:

@@ -2,7 +2,6 @@ name: umi_tools
 channels:
   - defaults
   - bioconda
-  - conda-forge
 dependencies:
   - openssl=1.0
   - samtools
