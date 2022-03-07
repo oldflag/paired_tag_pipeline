@@ -38,7 +38,7 @@ process MACS2_peakcall {
 
     cat "${narrow_peaks}" "${broad_peaks}" | cut -f1-5 | bedtools sort -i /dev/stdin | bedtools merge -i /dev/stdin > "${merged_peaks}"
     echo "GeneID	Chr	Start	End	Strand" > "${peaks_saf}"
-    cat "${merged_peaks}" | awk '{print "${antibody_name}_Peak."NR"\t"\$1"\t"\$2"\t"\$3"\t."}' >> "${peaks_saf}"
+    cat "${merged_peaks}" | awk '{print "${antibody_name}_Peak."NR"@"\$1":"\$2":"\$3"\t"\$1"\t"\$2"\t"\$3"\t."}' >> "${peaks_saf}"
     rm "${filt_bam}"
     """
 
