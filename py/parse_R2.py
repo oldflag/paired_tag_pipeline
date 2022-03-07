@@ -104,33 +104,6 @@ def iter_chunk_args(fastq_file, linker1, linker2, barcode_map,
         chunk = list(islice(fastq_iter, chunk_size))
 
 
-
-def __deprecated__iter_read_args(fastq_file, linker1, linker2, barcode_map, 
-                   sample_map, umi_size, linker_size):
-    """
-    For each record in the fastq file, generate the arguments for a call
-    to the R2 parse function.
-
-    :fastq_file: The path to the R2 fastq file
-    :linker1: A -StripedSmithWaterman- object for linker1
-    :linker2: A -StripedSmithWaterman- object for linker2
-    :barcode_map: A dictionary mapping sequences to labels (well barcodes)
-    :sample_map: A dictionary mapping sequences to labels (sample barcodes)
-    :umi_size: The size (in bp) of the UMI sequence
-    :linker_size: The size (in bp) of the linker sequences
-
-    :returns: An iterator over arguments to the R2 parser
-
-    """
-    barcode_size = len(inext(barcode_map))
-    sample_size = len(inext(sample_map))
-    for fastq_record in read_fastq(fastq_file):
-        yield (fastq_record, linker1, linker2, umi_size, 
-               barcode_size, sample_size, linker_size,
-               barcode_map, sample_map)
-
-
-
 def extract_barcodes(seq, linker1, linker2, lumi, lbc, lsn, lln):
     """
     Extract the barcodes from a Paired-Tag second read (R2).
@@ -203,7 +176,7 @@ def extract_barcodes(seq, linker1, linker2, lumi, lbc, lsn, lln):
         sbc = 'N' 
         res = 'N' * RE_LENGTH
     else:
-        tbase = seq[eol2 + 1]
+        tbase = seq[eol2]
         eol2 += 1
         sbc = seq[eol2:(eol2 + lsn)]
         res = seq[(eol2+lsn):(eol2+lsn+RE_LENGTH)]

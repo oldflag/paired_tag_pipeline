@@ -66,12 +66,14 @@ def transform_read(read, read_n, sbc_rg_map):
       BC -> raw sbc
       CR -> full barcode string
       CB -> parsed BC1BC2
+      XX -> the read number
 
     Also add the read to the appropriate read group
  
     Inputs:
     -----------
     read - a pysam AlignedSegment
+    read_n - the number of the read
     sbc_rg_map - a dictionary of sample ids to read grop
 
     Outputs:
