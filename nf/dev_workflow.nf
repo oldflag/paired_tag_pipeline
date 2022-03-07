@@ -10,13 +10,15 @@ nextflow.enable.dsl=2
 
 
 // general parameters
-params.RUN_NAME = 'dev-workflow-run'
+params.RUN_NAME = 'Ishii_ET_RD'
 params.HOME_REPO = '/home/app.dev1/repos/pipelines/'
 params.py_dir = params.HOME_REPO + 'py/'
 
 // input and output
-LIBRARY_DIGEST = file(params.HOME_REPO + '/ex/example_library_digest.csv')
-SAMPLE_DIGEST = file(params.HOME_REPO + '/ex/zhu2020_sample_digest.csv')
+// LIBRARY_DIGEST = file(params.HOME_REPO + '/ex/example_library_digest.csv')
+// SAMPLE_DIGEST = file(params.HOME_REPO + '/ex/zhu2020_sample_digest.csv')
+LIBRARY_DIGEST = file('libdigest.csv')
+SAMPLE_DIGEST = file('sample_digest.csv')
 params.output_dir = 'publisher'
 
 
@@ -27,7 +29,7 @@ params.trim_qual = 20
 
 // parameters of R2 parsing
 params.linker_file = file(params.HOME_REPO + '/config/linkers.fa')
-params.combin_barcodes = file(params.HOME_REPO + '/config/well_barcode_7bp.fa')
+params.combin_barcodes = file(params.HOME_REPO + '/config/well_barcode_8bp.fa')
 params.sample_barcodes = SAMPLE_DIGEST  /* now BCs are exported from LIMS file(params.HOME_REPO +  '/config/sample_barcode_4bp.fa') */
 params.umi_len = 10
 params.r2_parse_threads = 4
