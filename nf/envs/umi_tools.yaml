@@ -1,9 +1,10 @@
 name: umi_tools
 channels:
+  - conda-forge
   - defaults
   - bioconda
 dependencies:
-  - openssl=1.0
+  - openssl
   - samtools
   - umi_tools
   - anndata

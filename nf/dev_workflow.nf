@@ -10,14 +10,16 @@ nextflow.enable.dsl=2
 
 
 // general parameters
-params.RUN_NAME = 'dev-workflow-run'
-params.HOME_REPO = '/home/chartl/repos/pipelines/'
+params.RUN_NAME = 'Ishii_ET_RD'
+params.HOME_REPO = '/home/app.dev1/repos/pipelines/'
 params.py_dir = params.HOME_REPO + 'py/'
 
 // input and output
-LIBRARY_DIGEST = file(params.HOME_REPO + '/ex/example_library_digest.csv')
-SAMPLE_DIGEST = file(params.HOME_REPO + '/ex/zhu2020_sample_digest.csv')
-params.output_dir = '/NAS1/test_runs/2022-02-20/'
+// LIBRARY_DIGEST = file(params.HOME_REPO + '/ex/example_library_digest.csv')
+// SAMPLE_DIGEST = file(params.HOME_REPO + '/ex/zhu2020_sample_digest.csv')
+LIBRARY_DIGEST = file('libdigest.csv')
+SAMPLE_DIGEST = file('sample_digest.csv')
+params.output_dir = 'publisher'
 
 
 // parameters of R1 trimming
@@ -27,7 +29,7 @@ params.trim_qual = 20
 
 // parameters of R2 parsing
 params.linker_file = file(params.HOME_REPO + '/config/linkers.fa')
-params.combin_barcodes = file(params.HOME_REPO + '/config/well_barcode_7bp.fa')
+params.combin_barcodes = file(params.HOME_REPO + '/config/well_barcode_8bp.fa')
 params.sample_barcodes = SAMPLE_DIGEST  /* now BCs are exported from LIMS file(params.HOME_REPO +  '/config/sample_barcode_4bp.fa') */
 params.umi_len = 10
 params.r2_parse_threads = 4
@@ -41,6 +43,8 @@ params.star_index = file('/home/share/storages/2T/genome/mouse/star_index/')
 // parameters for read counting & bam annotation
 params.genome_bin_file = file('/home/share/storages/2T/genome/mouse/GRCm39_1kb.saf')
 params.genome_gtf_file = file('/home/share/storages/2T/genome/mouse/gencode.vM28.annotation.gtf')
+params.genome_gtf_collapsed_file = file('/home/share/storages/2T/genome/mouse/gencode.vM28.annotation.collapsed.gtf')
+params.genome_bed_file = file('/home/share/storages/2T/genome/mouse/gencode.vM28.annotation.bed')
 params.genome_element_db = file('/home/chartl/projects/2022-02/annotation_files_for_dna/epimap/mmSDB.saf')
 params.count_ncores = 3
 params.macs_genome_type = "mm"
@@ -49,9 +53,11 @@ params.macs_genome_type = "mm"
 include { trim_fq_single } from params.HOME_REPO + '/nf/modules/trim'
 include { parse_pairedtag_r2; split_annot_r1; add_tags as tag1; add_tags as tag2} from params.HOME_REPO + '/nf/modules/pairedtag_reads'
 include { star_aligner_single; bwa_aligner_single } from params.HOME_REPO + '/nf/modules/alignment'
-include { annotate_multiple_features as rna_annot; umitools_count as rna_count; 
+include { rnaseqc_call } from params.HOME_REPO + '/nf/modules/rnaseqc'
+include { annotate_multiple_features as rna_annot; umitools_count as rna_count; umitools_count as rna_bin_count;
           merge_counts as dna_merge_read; merge_counts as dna_merge_umi; 
-          merge_counts as rna_merge_read; merge_counts as rna_merge_umi;
+          merge_counts as rna_merge_read; merge_counts as rna_merge_umi; 
+          merge_counts as rna_merge_bin_read; merge_counts as rna_merge_bin_umi;
           merge_counts as peak_merge_read; merge_counts as peak_merge_umi } from params.HOME_REPO + '/nf/modules/count'
 include { annotate_multiple_features as dna_annot; umitools_count as dna_count} from params.HOME_REPO + '/nf/modules/count'
 include { annotate_reads_with_features as peak_annot; umitools_count as peak_count } from params.HOME_REPO + '/nf/modules/count'
@@ -60,7 +66,9 @@ include { MACS2_peakcall; merge_saf; chip_qc } from params.HOME_REPO + '/nf/modu
 include { publishData as publishdnabam; publishData as publishrnabam; 
           publishData as publishdnareadcount; publishData as publishdnaumicount; 
           publishData as publishrnareadcount; publishData as publishrnaumicount; 
-          publishData as publishdnapeakreadcount; publishData as publishdnapeakumicount } from params.HOME_REPO + '/nf/modules/publish' 
+          publishData as publishrnabinreadcount; publishData as publishrnabinumicount;
+          publishData as publishdnapeakreadcount; publishData as publishdnapeakumicount;
+          publishData as publishrnaqc } from params.HOME_REPO + '/nf/modules/publish' 
 
 /* channel over rows of the digest */
 read1_ch = Channel.fromPath(LIBRARY_DIGEST).splitCsv(header: true, sep: ',')
@@ -94,6 +102,9 @@ workflow {
   dna_rawbam = bwa_aligner_single(dna_fq)
   rna_rawbam = star_aligner_single(rna_fq)
   
+  //rna_qc
+  rnaqc = rnaseqc_call(rna_rawbam.map{it -> tuple(it[0], it[1], it[3], it[4])}, params.genome_gtf_collapsed_file, params.genome_bed_file )
+
   //filtering and tagging
   dna_tagged = tag1(dna_rawbam.filter{ ! it[1].simpleName.contains('_unlinked') })
   rna_tagged = tag2(rna_rawbam.filter{ ! it[1].simpleName.contains('_unlinked') })
@@ -106,9 +117,14 @@ workflow {
                          tuple(params.genome_bin_file, 'SAF', 'BN'),
                          tuple(params.genome_gtf_file, 'GTF', 'GN'))
   
-  // read and umi count with umi_tools based on a given tag
+  /* read and umi count with umi_tools based on a given tag */
+  // DNA read and umi count per cell 
   dna_counts = dna_count(dna_withGN[0], 'BN')
+  // RNA read and umi count per cell per gene
   rna_counts = rna_count(rna_withGN[0], 'GN')
+  // RNA read and umi count per cell  
+  rna_bin_counts = rna_bin_count(rna_withGN[0], 'BN')
+
   
   /* Peak calling with anibodies */
   // grouping by antibody - this is the 5th element of the tuple
@@ -128,11 +144,12 @@ workflow {
   chip_qc = chip_qc(bam_peak_ch.map{ it -> tuple(it[0], it[1], it[2])})
   dna_withPeak = peak_annot(bam_peak_ch, 'peaks')
 
+
   // combining all peaks for publication
   merged_saf = merge_saf(dna_peaks.map{it -> it[2]}.collect(), "all_antibodies")  
   
   // read and umi count based on peaks
-  peak_counts = peak_count(dna_withPeak[0].map{it -> tuple(it[0], it[2], '')}, 'XT')
+  peak_counts = peak_count(dna_withPeak[0].map{it -> tuple(it[0], it[2], '', '', '')}, 'XT')
 
   // merge annotated bams
   // note that it[1] here is always 'peaks'
@@ -146,21 +163,29 @@ workflow {
   annorna_mg = merge_annornabams(rna_mg_input)
   
   // merge DNA read and umi counts
-  read_input = dna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[4].collect(), 'DNA_read')}
-  umi_input = dna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[3].collect(), 'DNA_umi')}
+  read_input = dna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[4].collect(), 'DNA_Q30_aligned_READcount_percell')}
+  umi_input = dna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[3].collect(), 'DNA_Q30_aligned_UMIcount_percell')}
   dna_read_merged_h5ad = dna_merge_read(read_input)
   dna_umi_merged_h5ad = dna_merge_umi(umi_input)
   
   
-  // merge RNA read and umi counts
-  r_read_input = rna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[4].collect(), 'RNA_read')}
-  r_umi_input = rna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[3].collect(), 'RNA_umi')}
+  // merge RNA read and umi counts per cell per gene
+  r_read_input = rna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[4].collect(), 'RNA_Q30_aligned_READcount_perGene')}
+  r_umi_input = rna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[3].collect(), 'RNA_Q30_aligned_UMIcount_perGene')}
   rna_read_merged_h5ad = rna_merge_read(r_read_input)
   rna_umi_merged_h5ad = rna_merge_umi(r_umi_input)
+
+  // merge RNA read and umi counts per cell
+  //TODO: need to group by libary id, assay id and antibody
+  r_bin_read_input = rna_bin_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[4].collect(), 'RNA_Q30_aligned_READcount_perBIN')}
+  r_bin_umi_input = rna_bin_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[3].collect(), 'RNA_Q30_aligned_UMIcount_perBIN')}
+  rna_bin_read_merged_h5ad = rna_merge_bin_read(r_bin_read_input)
+  rna_bin_umi_merged_h5ad = rna_merge_bin_umi(r_bin_umi_input)
+
   
   // merge Peak read and umi counts
-  p_read_input = peak_counts[0].map{ it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[4].collect(), 'dna_peak_read')}
-  p_umi_input = peak_counts[0].map{ it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[3].collect(), 'dna_peak_umi')}
+  p_read_input = peak_counts[0].map{ it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[4].collect(), 'DNA_Q30_aligned_READcount_perPeak')}
+  p_umi_input = peak_counts[0].map{ it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[3].collect(), 'DNA_Q30_aligned_UMIcount_perPeak')}
   peak_read_merged_h5ad = peak_merge_read(p_read_input)
   peak_umi_merged_h5ad = peak_merge_umi(p_umi_input)
   
@@ -173,5 +198,11 @@ workflow {
   publishrnaumicount(rna_umi_merged_h5ad)
   publishdnapeakreadcount(peak_read_merged_h5ad)
   publishdnapeakumicount(peak_umi_merged_h5ad)
+
+  //publish QCs 
+  publishrnaqc(rnaqc.map{it -> it[3]})
+  publishrnabinreadcount(rna_bin_read_merged_h5ad)
+  publishrnabinumicount(rna_bin_umi_merged_h5ad)
+
 }
   
