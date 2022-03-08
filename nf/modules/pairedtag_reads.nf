@@ -68,12 +68,12 @@ process split_annot_r1 {
 
     nul=\$(zcat out/*__unknown__unlinked__1.fq.gz | wc -l)
     if [ "\${nul}" -lt "12" ]; then
-        rm out/*__unknown__unlinked__1.fq.gz
+        rm -f out/*__unknown__unlinked__1.fq.gz
     fi
 
     nul=\$(zcat out/*__sample__unlinked__1.fq.gz | wc -l)
     if [ "\${nul}" -lt "12" ]; then
-       rm out/*__sample__unlinked__1.fq.gz
+       rm -f out/*__sample__unlinked__1.fq.gz
     fi
     """
 
