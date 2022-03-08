@@ -8,7 +8,6 @@ nextflow.enable.dsl=2
 // the digest_file is a csv of the form <sequence_id>,<library_type>,<fastq1>,<fastq2>
 // and drives the run of the pipeline
 
-
 // general parameters
 params.RUN_NAME = 'Ishii_ET_RD'
 params.HOME_REPO = '/home/app.dev1/repos/pipelines/'
