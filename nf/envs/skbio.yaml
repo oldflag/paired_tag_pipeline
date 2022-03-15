@@ -1,6 +1,7 @@
 name: skbio
 channels:
   - defaults
+  - conda-forge
   - bioconda
 dependencies:
   - scikit-bio

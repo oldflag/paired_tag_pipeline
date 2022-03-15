@@ -100,7 +100,7 @@ process add_tags {
     unsorted_bam = bam_file.simpleName - '.bam' + '_tag_uns.bam'
     annot_bam_file = bam_file.simpleName - '.bam' + '_tag.bam'
     """
-    python "${params.py_dir}"/add_tags.py "${bam_file}" "${unsorted_bam}"
+    python "${params.py_dir}"/add_tags.py "${bam_file}" "${unsorted_bam}" --library "${alignment_id}" --antibody "${antibody}"
     samtools sort "${unsorted_bam}" -o "${annot_bam_file}"
     """
 

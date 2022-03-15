@@ -1,6 +1,7 @@
 name: umitools 
 channels:
   - defaults
+  - conda-forge
   - bioconda
 dependencies:
   - openssl=1.0
