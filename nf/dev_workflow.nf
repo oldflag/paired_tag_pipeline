@@ -62,7 +62,7 @@ include { annotate_multiple_features as dna_annot; umitools_count as dna_count} 
 include { annotate_reads_with_features as peak_annot; umitools_count as peak_count } from params.HOME_REPO + '/nf/modules/count'
 include { merge_bams as merge_rnabams; merge_bams as merge_dnabams; merge_bams as merge_annodnabams; merge_bams as merge_annornabams } from params.HOME_REPO + '/nf/modules/alignment'
 include { MACS2_peakcall; merge_saf; chip_qc } from params.HOME_REPO + '/nf/modules/peaks'
-include { publishData as publishdnabam; publishData as publishrnabam; publishData as publishwhatever1; 
+include { publishData as publishdnabam; publishData as publishrnabam; publishData as publishbarcodecsv; 
           publishData as publishdnareadcount; publishData as publishdnaumicount; 
           publishData as publishrnareadcount; publishData as publishrnaumicount; 
           publishData as publishrnabinreadcount; publishData as publishrnabinumicount;
@@ -293,7 +293,7 @@ workflow {
   publishrnabinumicount(rna_bin_umi_merged_h5ad)
 
   //tmp: publish parsed barcode file
-  publishwhatever1(parsed_barcodes)
+  publishbarcodecsv(parsed_barcodes)
 
 }
   
