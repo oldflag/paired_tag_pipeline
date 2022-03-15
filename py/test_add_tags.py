@@ -25,6 +25,8 @@ def test_transform_read():
           ('TACCGATAC', 'BC32')]
     SM = [('AAAA', 'A0'), ('TTTT', 'C4'), ('GGGG', 'my_name_is'),
           ('TATA', 'some sample'), ('TCGC', 'another name')]
+    LIB = ['libA', 'libxyz', '']
+    AB = ['test', 'AGVADFA', '']
     seq = 'A' * 50
     
     for rname in READ_NAMES:
@@ -32,18 +34,20 @@ def test_transform_read():
             for bc1 in BC:
                 for bc2 in BC:
                     for sam in SM:
-                        rg = f'{sam[1]}_RG'
-                        rgm = {sam[1]: rg}
-                        rec = pysam.AlignedSegment()
-                        rec.query_sequence = seq
-                        fullname = rname + '|' + umi + ':' + bc1[1] + ':' + bc2[1] + ':' + sam[1] + ':rna'
-                        fullname += '|' + umi + ':' + bc1[0] + ':' + bc2[0] + ':' + sam[0] + ':GCCGCCG'
-                        rec.query_name = fullname
-                        newrec = atg.transform_read(rec, 1, rgm)
-                        assert newrec.get_tag('MI') == umi
-                        assert newrec.get_tag('BC') == sam[0]
-                        assert newrec.get_tag('CR') == umi + ':' + bc1[0] + ':' + bc2[0] + ':' + sam[0] + ':GCCGCCG'
-                        assert newrec.get_tag('CB') == bc1[1] + '.' + bc2[1] + '.' + sam[1]
-                        assert newrec.get_tag('XX') == '000000001'
+                        for lib in LIB:
+                            for antib in AB:
+                                rg = f'{sam[1]}_RG'
+                                rgm = {sam[1]: rg}
+                                rec = pysam.AlignedSegment()
+                                rec.query_sequence = seq
+                                fullname = rname + '|' + umi + ':' + bc1[1] + ':' + bc2[1] + ':' + sam[1] + ':rna'
+                                fullname += '|' + umi + ':' + bc1[0] + ':' + bc2[0] + ':' + sam[0] + ':GCCGCCG'
+                                rec.query_name = fullname
+                                newrec = atg.transform_read(rec, 1, rgm, lib, antib)
+                                assert newrec.get_tag('MI') == umi
+                                assert newrec.get_tag('BC') == sam[0]
+                                assert newrec.get_tag('CR') == umi + ':' + bc1[0] + ':' + bc2[0] + ':' + sam[0] + ':GCCGCCG'
+                                assert newrec.get_tag('CB') == (lib + ':' + antib + ':' + sam[1] + ':' + bc1[1] + ':' + bc2[1]).lstrip(':').replace('::', ':')
+                                assert newrec.get_tag('XX') == '000000001'
                         
     
