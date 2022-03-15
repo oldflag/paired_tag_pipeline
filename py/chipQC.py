@@ -175,10 +175,12 @@ def compute_sample_stats(cell_stats):
                 'total_umi': list(),
                 'MQ30_mapped_umi': list(),
                 'umi_in_peak': list(),
-                'frac_umi_in_peak': list()
+                'frac_umi_in_peak': list(),
+                'estimated_unmapped_umi': list()
             }
         sample_stats[sample]['total_reads'].append(good_reads + filtered_reads + unmapped_reads)
         sample_stats[sample]['total_umi'].append(good_umi + filtered_umi)
+        sample_stats[sample]['estimated_unmapped_umi'].append((good_umi/good_reads) * unmapped_reads)
         sample_stats[sample]['MQ30_mapped_umi'].append(good_umi)
         sample_stats[sample]['frac_MQ30_mapped_reads'].append(div_(good_reads, good_reads + filtered_reads + unmapped_reads))
         sample_stats[sample]['frac_mapped_in_peak_reads'].append(div_(good_on_target_reads, good_reads))
@@ -272,7 +274,7 @@ def main(args):
                         cct = stat_counts[fullcell][k1][k2][k3]
                         out.write(f'{sample_id}\t{library}\t{sample}\t{cell}\t{k1}\t{k2}\t{k3}\t{cct}\n')
             n_unmapped = stat_counts[fullcell]['unmapped']['reads']
-            out.write(f'{sample_id}\t{library}\t{sample}\t{cell}\tunmapped\tNA\tNA\treads\t{n_unmapped}\n')
+            out.write(f'{sample_id}\t{library}\t{sample}\t{cell}\tunmapped\tNA\treads\t{n_unmapped}\n')
 
    
     if args.sample_out is not None:
