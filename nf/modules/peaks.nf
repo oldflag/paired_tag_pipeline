@@ -20,7 +20,7 @@ process MACS2_peakcall {
     tuple file(bam_file), val(experiment_name), val(antibody_name)
 
   output:
-    tuple val(experiment_name), file(merged_peaks), file(peaks_saf)
+    tuple val(experiment_name), file(merged_peaks), file(peaks_saf), val(antibody_name)
 
   script:
     basename = "${experiment_name}_${antibody_name}"
@@ -38,7 +38,7 @@ process MACS2_peakcall {
 
     cat "${narrow_peaks}" "${broad_peaks}" | cut -f1-5 | bedtools sort -i /dev/stdin | bedtools merge -i /dev/stdin > "${merged_peaks}"
     echo "GeneID	Chr	Start	End	Strand" > "${peaks_saf}"
-    cat "${merged_peaks}" | awk '{print "${antibody_name}_Peak"NR"\t"\$1"\t"\$2"\t"\$3"\t."}' >> "${peaks_saf}"
+    cat "${merged_peaks}" | awk '{print "${antibody_name}_Peak."NR"@"\$1":"\$2":"\$3"\t"\$1"\t"\$2"\t"\$3"\t."}' >> "${peaks_saf}"
     rm "${filt_bam}"
     """
 
@@ -83,4 +83,34 @@ process merge_saf {
       """
 } 
 
+/*
+ * This module defines a process for computing basic ChipSeq QC metrics.
+ *
+ * Config-defined parameters
+ * ----------------------------
+ * HOME_REPO - location of the repository
+ */
+process chip_qc {
+  conda params.HOME_REPO + '/nf/envs/bwa.yaml'
 
+  input:
+    tuple val(chipfile_id), file(bam_file), file(saf_file)
+
+  output:
+    tuple val(chipfile_id), file(cell_stats), file(sample_stats)
+
+  script:
+    cell_stats = "${chipfile_id}.chipQC_cell.txt"
+    sample_stats = "${chipfile_id}.chipQC_sample.txt"
+
+    """
+    python "${params.HOME_REPO}/py/chipQC.py" "${bam_file}" "${saf_file}" "${cell_stats}" --sample_out "${sample_stats}"
+    """
+
+  stub:
+    cell_stats = "${chipfile_id}.chipQC_cell.txt"
+    sample_stats = "${chipfile_id}.chipQC_sample.txt"
+    """
+    touch "${cell_stats}" "${sample_stats}"
+    """
+}

@@ -4,6 +4,7 @@ channels:
   - bioconda
 dependencies:
   - macs2
+  - numpy=1.22
   - bedtools
   - samtools
 prefix: /home/app.dev1/anaconda3/envs/macs2

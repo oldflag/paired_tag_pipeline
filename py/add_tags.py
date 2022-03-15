@@ -11,6 +11,8 @@ def get_args():
     parser = ArgumentParser('add_tags')
     parser.add_argument('bam', help='the input bam file')
     parser.add_argument('out', help='the output bam file')
+    parser.add_argument('--library', help='The library name', default='')
+    parser.add_argument('--antibody', help='The antibody name', default='')
 
     return parser.parse_args()
 
@@ -49,11 +51,11 @@ def main(args):
 
     outfile = pysam.AlignmentFile(args.out, mode='wb', header=header_dct)
     for i, read in enumerate(handle):
-        outfile.write(transform_read(read, i, sam2rg))
+        outfile.write(transform_read(read, i, sam2rg, args.library, args.antibody))
     outfile.close()
 
 
-def transform_read(read, read_n, sbc_rg_map):
+def transform_read(read, read_n, sbc_rg_map, library, antibody):
     """
     Given a read of the form
     
@@ -66,12 +68,15 @@ def transform_read(read, read_n, sbc_rg_map):
       BC -> raw sbc
       CR -> full barcode string
       CB -> parsed BC1BC2
+      FC -> the full cell name (lib:anti:sam:bc1:bc2)
+      XX -> the read number
 
     Also add the read to the appropriate read group
  
     Inputs:
     -----------
     read - a pysam AlignedSegment
+    read_n - the number of the read
     sbc_rg_map - a dictionary of sample ids to read grop
 
     Outputs:
@@ -81,7 +86,13 @@ def transform_read(read, read_n, sbc_rg_map):
     rawname, parsed, full = read.query_name.split('|')
     read.set_tag('CR', full)
     read.set_tag('BC', full.split(':')[-2])
-    read.set_tag('CB', '.'.join(parsed.split(':')[1:4]))
+    totname_prefix = (library + ':' + antibody).strip(':').lstrip(':')
+    psplit = parsed.split(':')
+    if totname_prefix != '':
+        totname = totname_prefix + f':{psplit[3]}:{psplit[1]}:{psplit[2]}'
+    else:
+        totname = f'{psplit[3]}:{psplit[1]}:{psplit[2]}'
+    read.set_tag('CB', totname)
     read.set_tag('RG', sbc_rg_map[parsed.split(':')[-2]])
     umi = parsed.split(':')[0]
     if umi != '*':

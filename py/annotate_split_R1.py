@@ -33,75 +33,34 @@ def get_args():
     parser.add_argument('well_bc', help='The well barcode file (fasta)')
     parser.add_argument('sample_manifest', help='The sample manifest file, containing sample id, barcode, and antibody')
     parser.add_argument('--cells_per_fastq', help='The target # cells / fastQ for output', default=10000, type=int)
-    parser.add_argument('--estimated_cells', help='An estimate of the total # of cells', type=int, default=None)
+    parser.add_argument('--noestimate', help='Do not estimate total # of cells; compute exact numbers', action='store_true')
     parser.add_argument('--sequence_id', help='The sequence id. Defaults to the {this_thing}_R1.fastq.gz', default=None)
     parser.add_argument('--outdir', help='The output directory', default=None)
+    parser.add_argument('--min_rlen', help='Minimum R1 read length for output', default=30, type=int)
 
     return parser.parse_args()
 
 
 
-def estimate_via_recapture(bcfile, n):
-    """
-    Use capture/recapture methodology to provide a coarse estimate
-    of the number of cells per sample, number of samples, and total
-    cells.
-
-    Inputs
-    --------
-    :bcfile: The barcode file
-    :n:      The number of (matching) reads to use in the estimate
-
-
-    Outputs
-    ---------
-    number_of_cells, number_of_samples, cells_per_sample
-
-    """
-    nmatch = 0
+def compute_cells_per_sample(bcfile):
     per_sample_umi = dict()
-    # capture + mark
     with xopen(bcfile, 'rt') as handle:
         for entry in handle:
             bcinfo = entry.split(',')[1]
             if '*' not in bcinfo:
-                codes = bcinfo.split(':')
-                # umi:bc1:bc2:sm:re
+                codes = bcinfo.split(':')                                                                                                                                                                                                                       # umi:bc1:bc2:sm:re
                 sample, cell, umi = codes[3], codes[1] + codes[2], codes[0]
                 if sample not in per_sample_umi:
                     per_sample_umi[sample] = dict()
                 per_sample_umi[sample][cell] = setadd(per_sample_umi[sample].get(cell, set()), codes[0])
-                nmatch += 1
-            if nmatch >= n/2:
-                break
-        # recapture
-        per_sample_new_cells, per_sample_repeats = dict(), dict()
-        nmatch = 0
-        for entry in handle:
-            bcinfo = entry.split(',')[1]
-            if '*' not in bcinfo:
-                codes = bcinfo.split(':')
-                sample, cell, umi = codes[3], codes[1] + codes[2], codes[0]
-                if sample not in per_sample_umi:
-                    raise ValueError('Cell number estimation failed -- too few reads used')
-                if cell not in per_sample_umi[sample]:
-                    per_sample_new_cells[sample] = per_sample_new_cells.get(sample, 0) + 1
-                    nmatch += 1
-                else:
-                    per_sample_repeats[sample] = per_sample_repeats.get(sample, 0) + \
-                                                 (umi not in per_sample_umi[sample][cell])
-                    nmatch += 1
-            if nmatch >= n/2:
-                break
-
-    n_samples = len(per_sample_new_cells)
-    cps = {sm: int(len(per_sample_umi[sm])*(per_sample_new_cells[sm] + per_sample_repeats[sm])/per_sample_repeats[sm])
-            for sm in per_sample_umi}
+    n_samples = len(per_sample_umi)
+    cps = {sm: len(per_sample_umi[sm])
+           for sm in per_sample_umi}
     total_cells = sum(cps.values())
-    return total_cells, n_samples, cps
+    return total_cells, n_samples, cps 
 
 
-def get_group_map(pool_fasta, sample_digest_file, groups_per_sample, out_base, library_id):
+def get_group_map(pool_fasta, sample_digest_file, groups_per_sample, out_base, library_id, open_for_writing=True):
     """
     Produce a dictionary of output handles for groups of cell ids
 
@@ -114,10 +73,11 @@ def get_group_map(pool_fasta, sample_digest_file, groups_per_sample, out_base, l
                         sample to write
     :out_base: base for the output file-names
     :library_id: the library id for this run (for matching in the sample digest)
+    :open_for_writing: Whether to return open file-handles or just the files. Used for testing
 
     Output
     ---------
-    Map of {bc1:bc2:sm -> handle}, handle to (nomatch) reads
+    Map of {bc1:bc2:sm -> handle}, handle to (nomatch) reads, handle to unmatched samples
 
     """
     bc1_f, bc2_f = list(read_fasta(pool_fasta)), list(read_fasta(pool_fasta))
@@ -128,19 +88,27 @@ def get_group_map(pool_fasta, sample_digest_file, groups_per_sample, out_base, l
     for digest_record in digest_recs:
         assay_id, antibody = digest_record['assay_id'], digest_record['antibody_name']
         sample_out = list()
-        cpg = int(nw / groups_per_sample[digest_record['assay_id']])+1
+        cpg = int(nw / groups_per_sample.get(digest_record['assay_id'], 1))
+        rem = nw % cpg
+        if rem > 0 and rem < cpg/2:
+            cpg = int(cpg + max(1, rem/groups_per_sample.get(digest_record['assay_id'], 1)))
+        rem = nw % cpg
         for i, group_list in enumerate(grouped_product([digest_record['assay_id']], 
                                        bc1_f, bc2_f, 
                                        n=cpg)):
             of = f'{out_base}__{assay_id}__{antibody}__{i+1}.fq.gz'
-            hdl = dxopen(of, 'wt')
+            hdl = dxopen(of, 'wt') if open_for_writing else of
             out_files.append(of)
             for j, (aid, bc1, bc2) in enumerate(group_list):
                 handles[bc1.name + bc2.name + aid] = hdl
 
     sys.stderr.write(f'Writing to {len(out_files) + 2} fastQ files\n') 
+    unknown_barcode = f'{out_base}__unknown__unlinked__1.fq.gz'
+    unknown_sample = 'f{out_base}__sample__unlinked__1.fq.gz'
+    ubh = dxopen(unknown_barcode, 'wt') if open_for_writing else unknown_barcode
+    ush = dxopen(unknown_sample, 'wt') if open_for_writing else unknown_sample
 
-    return handles, dxopen('%s__unknown__unlinked__1.fq.gz' % out_base, 'wt'), dxopen('%s__sample__unlinked__1.fq.gz' % out_base, 'wt')
+    return handles, ubh, ush
    
 
 def get_base(fn, pfx=None):
@@ -151,21 +119,22 @@ def get_base(fn, pfx=None):
     and optionally adding a prefix (dir)
     """
     pfx = '' if pfx is None else pfx.strip('/') + '/'  # ensure just one /
-    if '_R1' in fn:
-        bs = fn.split('/')[-1].split('_R1')[0]
-    if '_1.f' in fn:
-        bs = fn.split('/')[-1].split('_1.f')[0]
-    else:
-        bs = fn.strip('.gz').strip('.FQ').strip('.fastq').strip('.fq')  
+    suffix_list_order = ['.gz', '.fq', '.fastq', '.FQ', 'FASTQ', '_1', '_R1']
+    bf = fn
+    for sfx in suffix_list_order:
+        k = len(sfx)
+        if bf[-k:] == sfx:
+            bf = bf[:-k]
 
-    return pfx + bs
+    return pfx + bf
                
 
 def main(args):
-    if args.estimated_cells is None:
-        ncell, _, cell_per_sam = estimate_via_recapture(args.bc_csv, n=1200000)  # use 1.2M reads to estimate # of cells
+    print(args)
+    if args.noestimate:
+        ncell, _, cell_per_sam = compute_cells_per_sample(args.bc_csv)
     else:
-        ncell = args.estimated_cells
+        ncell, _, cell_per_sam = estimate_via_recapture(args.bc_csv, n=1200000)  # use 1.2M reads to estimate # of cells
 
 
     #n_groups = 1 + int(ncell / args.cells_per_fastq)
@@ -183,7 +152,7 @@ def main(args):
     with xopen(args.bc_csv, 'rt') as bcinput:
         bc_in = (x.strip().split(',') for x in bcinput)
 
-        for fq, bc in zip(fq_in, bc_in):
+        for nread, (fq, bc) in enumerate(zip(fq_in, bc_in)):
             # make sure that the names really do match
             assert fq.name.split()[0] == bc[0].split()[0], 'FastQ records and barcodes out of phase: %s' % repr((fq, bc))
             # place the barcode info into the name -- before any whitespace -- delimited by a |
@@ -200,8 +169,11 @@ def main(args):
                     handle = sample_only_handle
                 else:
                     handle = reject_handle
-            if len(fq.seq) > 0:
-                handle.write('@' + name + ' ' + sfx + '\n')
+            if len(fq.seq) >= args.min_rlen:
+                rname = '@' + name + ' ' + sfx
+                if len(rname) > 100:
+                    rname = f'read{1+nread}|{bc[1]}|{bc[2]}'
+                handle.write('@' + rname + '\n')
                 handle.write(fq.seq + '\n')
                 handle.write('+\n')
                 handle.write(fq.qual + '\n')
