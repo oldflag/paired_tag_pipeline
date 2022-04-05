@@ -177,12 +177,14 @@ workflow {
   // out: (merged_bam, expname, antibody)
   dna_mg = merge_dnabams(dna_withGN_ab.map{it -> tuple(it[1].collect(), params.RUN_NAME+'_dna_', it[0])})
   
-  // peak calling per antibody and adding antibody name to peak name
+  /* peak calling per antibody and adding antibody name to peak name */
   // in: (merged_bam, expname, antibody)
   // out: (expname, merged_peaks(bed), peaks_saf, antibody_name)
   dna_peaks = MACS2_peakcall(dna_mg)
 
-  // channelling
+  /* channelling to align bam and peak result together */ 
+  //TODO: we may not need join operation if "MACS2_peakcall" return a bam file
+  // (expname, merged_peaks(bed), peaks_saf, antibody_name) join (merged_bam, expname, antibody) on antibody
   // out: (expname_antibody, bam, saf, 'SAF')
   bam_peak_ch = dna_peaks.map{ it -> tuple(it[3], it[0], it[2])}.join(
                    dna_mg.map{it -> tuple(it[2], it[1], it[0])}).map{
