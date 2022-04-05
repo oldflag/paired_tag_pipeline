@@ -152,10 +152,23 @@ def extract_barcodes(seq, linker1, linker2, lumi, lbc, lsn, lln):
     if len(seq) < (lumi + 2*lbc + 2*lln + lsn) or seq.count('N') > 3:
         return None, None, None, None, None
 
-    l1, l2 = linker1(seq), linker2(seq)
+    l1 = linker1(seq)
+    # force l2 to be aligned after l1
+    seq2 = seq[(l1['target_begin'] + lln - 1):]
+    l2 = linker2(seq2)
+    l2 = {
+        'optimal_alignment_score': l2['optimal_alignment_score'],
+        'target_begin': l2['target_begin'] + lln + l1['target_begin'] - 1
+    }
+
     if l2['target_begin'] - (l1['target_begin'] + lln) != lbc:
         # alignment failed - distance between linkers is not 1 barcode
-        return None, None, None, None, None
+        # if l2 alignment is good, just modify l1
+        shift = lbc - (l2['target_begin'] - (l1['target_begin'] + lln))
+        if (0 < shift < lbc) and l2['optimal_alignment_score'] > l1['optimal_alignment_score']:
+            l1 = {'target_begin': l1['target_begin'] - shift}
+        else:
+            return None, None, None, None, None
 
     if l1['target_begin'] > lumi + lbc + 5:
         return None, None, None, None, None

@@ -68,7 +68,7 @@ def get_group_map(pool_fasta, sample_digest_file, groups_per_sample, out_base, l
     ---------
     :pool_fasta: Fasta file of pool barcodes
     :sample_digest_file: csv-formatted digest file containing the fields
-                         `assay_id`, `antibody_name`, `sequence_library_id`, `barcode`, `well`
+                         `assay_id`, `antibody_name`, `library_id`, `barcode`, `well`
     :groups_per_sample: mapping {sample_id -> n_grp} number of fastq files per
                         sample to write
     :out_base: base for the output file-names

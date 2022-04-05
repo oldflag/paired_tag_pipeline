@@ -49,4 +49,22 @@ def test_r2_parsing():
                     assert sbc == parsed[3], (sbc, parsed[3])
                     assert 'TGCGGCCGC' == parsed[4], ('TGCGGCCGC', parsed[4])
                    
+
+def test_rescue_sequences():
+    L1, L2 = 'GTGGCCGATGTTTCGGTGCGAACTCAGACC', 'ATCCACGTGCTTGAGAGGCCAGAGCATTCG'
+    L1sw, L2sw = StripedSmithWaterman(L1), StripedSmithWaterman(L2)
+
+    examples = [
+        'GCCCCTAGTCGAAACTCCCGCTTTCCGAACTTTCCGTGCGAACTCAGACCTAGTCACATCCACGTGCTTGAGAGGCCAGAGCATTCGTCCGTCCTGCAGGG',
+        'TTATTTGGACACCCTAAGTGGCAGATGTTTCGGTGCGAACTCAACCCCTTCATCCACGTGCTTGAGAGGCCAGAGCATTCGTTTACCCTGCAGGTTTTTTT',
+        'GAGGAATTAGAGTGCTCCTCCTGGCCGATGTTTCGGTGCGAACTCAGACCGTGGTCTATCCACGTGCTTGAGAGGCCAGAGCATTCGTATGACCTGCAGGT'
+     ]
+
+    parsed = [('GCCCCTAGTC', 'GAAACTC', 'TAGTCAC', 'CCGT', 'TCCTGCAGG'),
+     ('NNNTTATTTG', 'GACACCC', 'CCCCTTC', 'TTAC', 'TCCTGCAGG'),
+     ('GAGGAATTAG', 'AGTGCTC', 'GTGGTCT', 'ATGA', 'TCCTGCAGG')]
+
+    for sequence, result in zip(examples, parsed):
+        res = pr2.extract_barcodes(sequence, L1sw, L2sw, 10, 7, 4, len(L1))
+        assert all([a == b for a, b in zip(res, result)]), [res, result]
  

@@ -180,7 +180,7 @@ def compute_sample_stats(cell_stats):
             }
         sample_stats[sample]['total_reads'].append(good_reads + filtered_reads + unmapped_reads)
         sample_stats[sample]['total_umi'].append(good_umi + filtered_umi)
-        sample_stats[sample]['estimated_unmapped_umi'].append((good_umi/good_reads) * unmapped_reads)
+        sample_stats[sample]['estimated_unmapped_umi'].append((good_umi/good_reads) * unmapped_reads if good_reads > 0 else -1)
         sample_stats[sample]['MQ30_mapped_umi'].append(good_umi)
         sample_stats[sample]['frac_MQ30_mapped_reads'].append(div_(good_reads, good_reads + filtered_reads + unmapped_reads))
         sample_stats[sample]['frac_mapped_in_peak_reads'].append(div_(good_on_target_reads, good_reads))
