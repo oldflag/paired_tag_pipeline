@@ -66,7 +66,9 @@ include { publishData as publishdnabam; publishData as publishrnabam; publishDat
           publishData as publishdnareadcount; publishData as publishdnaumicount; 
           publishData as publishrnareadcount; publishData as publishrnaumicount; 
           publishData as publishrnabinreadcount; publishData as publishrnabinumicount;
+          publishData as publishrnabinreadcounttxt; publishData as publishrnabinumicounttxt;
           publishData as publishdnapeakreadcount; publishData as publishdnapeakumicount;
+          publishData as publishdnapeakreadcounttxt; publishData as publishdnapeakumicounttxt;
           publishData as publishrnaqc } from params.HOME_REPO + '/nf/modules/publish' 
 
 /* channel over rows of the digest */
@@ -288,11 +290,16 @@ workflow {
   publishrnaumicount(rna_umi_merged_h5ad)
   publishdnapeakreadcount(peak_read_merged_h5ad)
   publishdnapeakumicount(peak_umi_merged_h5ad)
+  publishdnapeakreadcounttxt(p_read_input)
+  publishdnapeakumicounttxt(p_umi_input)
 
   //publish QCs 
   publishrnaqc(rnaqc.map{it -> it[3]})
   publishrnabinreadcount(rna_bin_read_merged_h5ad)
   publishrnabinumicount(rna_bin_umi_merged_h5ad)
+  publishrnabinreadcounttxt(r_bin_read_input)
+  publishrnabinumicounttxt(r_bin_umi_input)
+
 
   //tmp: publish parsed barcode file
   publishbarcodecsv(parsed_barcodes)
