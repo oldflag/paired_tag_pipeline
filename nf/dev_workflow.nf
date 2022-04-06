@@ -66,7 +66,9 @@ include { publishData as publishdnabam; publishData as publishrnabam; publishDat
           publishData as publishdnareadcount; publishData as publishdnaumicount; 
           publishData as publishrnareadcount; publishData as publishrnaumicount; 
           publishData as publishrnabinreadcount; publishData as publishrnabinumicount;
+          publishData as publishrnabinreadcounttxt; publishData as publishrnabinumicounttxt;
           publishData as publishdnapeakreadcount; publishData as publishdnapeakumicount;
+          publishData as publishdnapeakreadcounttxt; publishData as publishdnapeakumicounttxt;
           publishData as publishrnaqc } from params.HOME_REPO + '/nf/modules/publish' 
 
 /* channel over rows of the digest */
@@ -237,9 +239,9 @@ workflow {
   umi_input = dna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[3].collect(), 'DNA_Q30_aligned_UMIcount_percell')}
   // merging
   // in: (a list of count files, file_header)
-  // out: merged_count_h5ad file
-  dna_read_merged_h5ad = dna_merge_read(read_input)
-  dna_umi_merged_h5ad = dna_merge_umi(umi_input)
+  // out: merged_count files both in h5ad and txt.gz formats
+  dna_read_merged_count = dna_merge_read(read_input)
+  dna_umi_merged_count = dna_merge_umi(umi_input)
   
   
   /* merge RNA read and umi counts per cell per gene  which means the counts are based on "GN" tag*/
@@ -250,9 +252,9 @@ workflow {
   r_umi_input = rna_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[3].collect(), 'RNA_Q30_aligned_UMIcount_perGene')}
   // merging
   // in: (a list of count files, file_header)
-  // out: merged_count_h5ad file
-  rna_read_merged_h5ad = rna_merge_read(r_read_input)
-  rna_umi_merged_h5ad = rna_merge_umi(r_umi_input)
+  // out: merged count files both in h5ad and txt.gz formats
+  rna_read_merged_count = rna_merge_read(r_read_input)
+  rna_umi_merged_count = rna_merge_umi(r_umi_input)
 
   /* merge RNA read and umi counts per cell, which means the counts are based on "BN" tag */
   // channelling
@@ -262,9 +264,9 @@ workflow {
   r_bin_umi_input = rna_bin_counts[0].map{it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[3].collect(), 'RNA_Q30_aligned_UMIcount_perBIN')}
   // merging
   // in: (a list of count files, file_header)
-  // out: merged_count_h5ad file
-  rna_bin_read_merged_h5ad = rna_merge_bin_read(r_bin_read_input)
-  rna_bin_umi_merged_h5ad = rna_merge_bin_umi(r_bin_umi_input)
+  // out: merged count files both in h5ad and txt.gz formats
+  rna_bin_read_merged_count = rna_merge_bin_read(r_bin_read_input)
+  rna_bin_umi_merged_count = rna_merge_bin_umi(r_bin_umi_input)
 
   
   /* merge Peak read and umi counts, which means the counts are based on "XT(peak)" tag */
@@ -275,24 +277,28 @@ workflow {
   p_umi_input = peak_counts[0].map{ it -> tuple(1, it[0], it[1], it[2], it[3])}.groupTuple().map{ it -> tuple(it[3].collect(), 'DNA_Q30_aligned_UMIcount_perPeak')}
   // merging
   // in: (a list of count files, file_header)
-  // out: merged_count_h5ad file
-  peak_read_merged_h5ad = peak_merge_read(p_read_input)
-  peak_umi_merged_h5ad = peak_merge_umi(p_umi_input)
+  // out: merged count files both in h5ad and txt.gz formats
+  peak_read_merged_count = peak_merge_read(p_read_input)
+  peak_umi_merged_count = peak_merge_umi(p_umi_input)
   
   // publish results
   publishdnabam(annodna_mg[0].map{ it -> it[0]})
   publishrnabam(annorna_mg[0].map{ it -> it[0]})
-  publishdnareadcount(dna_read_merged_h5ad)
-  publishdnaumicount(dna_umi_merged_h5ad)
-  publishrnareadcount(rna_read_merged_h5ad)
-  publishrnaumicount(rna_umi_merged_h5ad)
-  publishdnapeakreadcount(peak_read_merged_h5ad)
-  publishdnapeakumicount(peak_umi_merged_h5ad)
+  publishdnareadcount(dna_read_merged_count[0])
+  publishdnaumicount(dna_umi_merged_count[0])
+  publishrnareadcount(rna_read_merged_count[0])
+  publishrnaumicount(rna_umi_merged_count[0])
+  publishdnapeakreadcount(peak_read_merged_count[0])
+  publishdnapeakumicount(peak_umi_merged_count[0])
+  publishdnapeakreadcounttxt(peak_read_merged_count[1])
+  publishdnapeakumicounttxt(peak_umi_merged_count[1])
 
   //publish QCs 
   publishrnaqc(rnaqc.map{it -> it[3]})
-  publishrnabinreadcount(rna_bin_read_merged_h5ad)
-  publishrnabinumicount(rna_bin_umi_merged_h5ad)
+  publishrnabinreadcount(rna_bin_read_merged_count[0])
+  publishrnabinumicount(rna_bin_umi_merged_count[0])
+  publishrnabinreadcounttxt(rna_bin_read_merged_count[1])
+  publishrnabinumicounttxt(rna_bin_umi_merged_count[1])
 
   //tmp: publish parsed barcode file
   publishbarcodecsv(parsed_barcodes)
