@@ -40,6 +40,38 @@ process parse_pairedtag_r2 {
     """
 }
 
+
+/*
+ *
+ * Produce a library-level diagnostic plot of barcode parsing
+ * 
+ * Config-defined parameters
+ * ----------------------------
+ *  + py_dir: path to the root python directory of the 'pipeliens' repo
+ *
+ */
+process barcode_qc {
+  conda params.HOME_REPO + '/nf/envs/skbio.yaml'
+  
+  input:
+    tuple val(sequence_id), file(barcode_csv)
+
+  output:
+    tuple val(sequence_id), file(barcode_qc_pdf)
+
+  script:
+    barcode_qc_pdf = "${sequence_id}.barcode_qc.pdf"
+    """
+    python "${params.py_dir}"/barcode_qc.py "${barcode_csv}" "${barcode_qc_pdf}"
+    """
+
+  stub:
+    barcode_qc_pdf = "${sequence_id}.barcode_qc.pdf"
+    """
+    touch "${barcode_qc_pdf}"
+    """
+}
+
 /*
  * Combine parsed sequence barcodes with trimmed fastq reads, and split these
  * reads into fastQs with ~10K cells in them

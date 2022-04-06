@@ -83,7 +83,7 @@ def get_group_map(pool_fasta, sample_digest_file, groups_per_sample, out_base, l
     bc1_f, bc2_f = list(read_fasta(pool_fasta)), list(read_fasta(pool_fasta))
     nw = len(bc1_f) * len(bc2_f)
     digest_recs = [rec for rec in DictReader(open(sample_digest_file)) 
-                   if rec['sequence_library_id'] == library_id]
+                   if rec['library_id'] == library_id]
     out_files, handles = list(), dict()
     for digest_record in digest_recs:
         assay_id, antibody = digest_record['assay_id'], digest_record['antibody_name']

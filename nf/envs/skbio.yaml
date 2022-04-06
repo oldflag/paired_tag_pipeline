@@ -5,4 +5,5 @@ channels:
   - bioconda
 dependencies:
   - scikit-bio
+  - seaborn
 prefix: /home/app.dev1/anaconda3/envs/skbio
