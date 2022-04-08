@@ -140,3 +140,68 @@ process merge_bams {
     touch "${merged_bam}"
     """
 }
+
+
+/*
+ * This process extracts basic alignment QC metrics
+ */
+process alignment_qc {
+  conda params.HOME_REPO + '/nf/envs/bwa.yaml'
+
+  input:
+    tuple val(sequence_id), file(bam_file), val(seqtype), val(assay), val(antibody)
+
+  output:
+    tuple val(sequence_id), file(alignment_stats)
+
+  script:
+    bamname = bam_file.simpleName
+    alignment_stats = bamname - '.bam' + '.alignment_stats.txt'
+    """
+    samtools stats "${bam_file}" | egrep "reads mapped:|reads unmapped:|reads MQ0:" | cut -f2 > stats_tmp1
+    samtools view -h -q 20 "${bam_file}" | samtools stats | grep "reads mapped:" | sed 's/mapped:/mapped Q20:/' | cut -f2 >> stats_tmp1
+    ok_cell=$(samtools view -q 20 "${bam_file}" | cut -f1 | tr '|' '\t' | cut -f2 | tr ':' '\t' | awk '{print $2,$3}' | sort | uniq -c | awk '$1 >= 5000' | wc -l)
+    echo "N cells >= 5000 reads: ${ok_cell}" >> stats_tmp1
+    good_cell=$(samtools view -q 20 "${bam_file}" | cut -f1 | tr '|' '\t' | cut -f2 | tr ':' '\t' | awk '{print $2,$3}' | sort | uniq -c | awk '$1 >= 20000' | wc -l)
+    echo "N cells >= 20000 reads: ${good_cell}" >> stats_tmp1
+    while read statline; do
+      statname=$(echo $statline | tr ':' '\t' | cut -f1 | sed 's/^\s\+//g')
+      statval=$(echo $statline | tr ':' '\t' | cut -f2 | sed 's/^\s\+//g')
+      echo "${sequence_id},${bamname},${seqtype},${assay},${antibody},${statname},${statval}" >> "${alignment_stats}"
+    done < stats_tmp1
+    rm stats_tmp1
+    """
+
+  stub:
+    bamname = bam_file.simpelName
+    alignment_stats = bamname - '.bam' + '.alignment_stats.txt'
+    """
+    touch "${alignment_stats}"
+    """
+}
+
+/*
+ * This process concatenates multiple alignment QC files into a single output file
+ *
+ * to be used as merge_alignment_qc(qc_files.collect())
+ */
+process merge_alignment_qc {
+  input:
+    file qc_files 
+    val base_name
+
+  output:
+    file merged_file
+
+  script:
+    merged_file = base_name + '.alignment_qc.txt"
+    """
+    cat "${qc_files}" > "${merged_file}"
+    """
+
+  stub:
+    merged_file = base_name + '.alignment_qc.txt"
+    """
+    touch "${merged_file}"
+    """
+} 
