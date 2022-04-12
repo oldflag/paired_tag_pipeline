@@ -9,16 +9,16 @@ nextflow.enable.dsl=2
 // and drives the run of the pipeline
 
 // general parameters
-params.RUN_NAME = 'Ishii_ET_RD'
-params.HOME_REPO = '/home/app.dev1/repos/pipelines/'
+params.RUN_NAME = 'ZhuTestRun'
+params.HOME_REPO = '/home/chartl/repos/pipelines/'
 params.py_dir = params.HOME_REPO + 'py/'
 
 // input and output
 // LIBRARY_DIGEST = file(params.HOME_REPO + '/ex/example_library_digest.csv')
 // SAMPLE_DIGEST = file(params.HOME_REPO + '/ex/zhu2020_sample_digest.csv')
-LIBRARY_DIGEST = file('libdigest.csv')
-SAMPLE_DIGEST = file('sample_digest.csv')
-params.output_dir = 'publisher'
+LIBRARY_DIGEST = file('zhu_library_digest_small.csv')
+SAMPLE_DIGEST = file('zhu2020_sample_digest.csv')
+params.output_dir = '/NAS1/test_runs/zhu2020_test'
 
 
 // parameters of R1 trimming
@@ -28,7 +28,7 @@ params.trim_qual = 20
 
 // parameters of R2 parsing
 params.linker_file = file(params.HOME_REPO + '/config/linkers.fa')
-params.combin_barcodes = file(params.HOME_REPO + '/config/well_barcode_8bp.fa')
+params.combin_barcodes = file(params.HOME_REPO + '/config/well_barcode_7bp.fa')
 params.sample_barcodes = SAMPLE_DIGEST  /* now BCs are exported from LIMS file(params.HOME_REPO +  '/config/sample_barcode_4bp.fa') */
 params.umi_len = 10
 params.r2_parse_threads = 4
@@ -41,7 +41,7 @@ params.star_index = file('/home/share/storages/2T/genome/mouse/star_index/')
 
 // parameters for read counting & bam annotation
 params.genome_bin_file = file('/home/share/storages/2T/genome/mouse/GRCm39_1kb.saf')
-params.genome_gtf_file = file('/home/share/storages/2T/genome/mouse/gencode.vM28.annotation.gtf')
+params.genome_saf_file = file('/home/share/storages/2T/genome/mouse/gencode.vM28.annotation.saf')
 params.genome_gtf_collapsed_file = file('/home/share/storages/2T/genome/mouse/gencode.vM28.annotation.collapsed.gtf')
 params.genome_bed_file = file('/home/share/storages/2T/genome/mouse/gencode.vM28.annotation.bed')
 params.genome_element_db = file('/home/chartl/projects/2022-02/annotation_files_for_dna/epimap/mmSDB.saf')
@@ -53,9 +53,10 @@ include { trim_fq_single } from params.HOME_REPO + '/nf/modules/trim'
 include { parse_pairedtag_r2; 
           split_annot_r1; 
           add_tags as tag1; 
-          add_tags as tag2;
+          add_tags as tag2; 
           barcode_qc} from params.HOME_REPO + '/nf/modules/pairedtag_reads'
-include { star_aligner_single; bwa_aligner_single; alignment_qc; merge_alignment_qc } from params.HOME_REPO + '/nf/modules/alignment'
+include { star_aligner_single; bwa_aligner_single
+          alignment_qc; merge_alignment_qc } from params.HOME_REPO + '/nf/modules/alignment'
 include { rnaseqc_call } from params.HOME_REPO + '/nf/modules/rnaseqc'
 include { annotate_multiple_features as rna_annot; umitools_count as rna_count; umitools_count as rna_bin_count;
           merge_counts as dna_merge_read; merge_counts as dna_merge_umi; 
@@ -72,8 +73,8 @@ include { publishData as publishdnabam; publishData as publishrnabam;
           publishData as publishrnabinreadcount; publishData as publishrnabinumicount;
           publishData as publishdnapeakreadcount; publishData as publishdnapeakumicount;
           publishData as publishrnaqc;
-          publishData as publishalignmentqc;
-          publishData as publishbarcodeqc } from params.HOME_REPO + '/nf/modules/publish' 
+          publishData as publishbarcodeqc;
+          publishData as publishalignmentqc } from params.HOME_REPO + '/nf/modules/publish' 
 
 /* channel over rows of the digest */
 read1_ch = Channel.fromPath(LIBRARY_DIGEST).splitCsv(header: true, sep: ',')
@@ -85,9 +86,10 @@ type_ch = Channel.fromPath(LIBRARY_DIGEST).splitCsv(header:true, sep: ',')
 
 
 workflow {
+  
   parsed_barcodes = parse_pairedtag_r2(read2_ch)
-  barcode_report = barcode_qc(parsed_barcodes)
-  publisbarcodeqc(barcode_report)
+  barcode_qc_files = barcode_qc(parsed_barcodes)
+  publishbarcodeqc(barcode_qc_files.map{it -> it[1]})
   trimmed_reads = trim_fq_single(read1_ch)
   trim_bc_join = trimmed_reads.map{ r -> tuple(r[0], r[1]) }.join(parsed_barcodes)
   run_fastqs = split_annot_r1(trim_bc_join)
@@ -107,11 +109,11 @@ workflow {
    //alignment - this will produce a channel of (seq_id, bamfile, seq_type, assay_id, antibody_name)
    dna_rawbam = bwa_aligner_single(dna_fq)
    rna_rawbam = star_aligner_single(rna_fq)
-   joined_bams = dna_rawbam.mix(rna_rawbam)
-   bam_qc = alignment_qc(joined_bams)
-   bam_qc_merged = merge_alignment_qc(bam_qc.map{it -> it[1]}.collect(), params.RUN_NAME)
-   publishalignmentqc(bam_qc_merged)
-   
+   all_bams = dna_rawbam.mix(rna_rawbam)
+   bamqc = alignment_qc(all_bams)
+   alignment_qcfile = merge_alignment_qc(bamqc.map{ it -> it[1]}.collect(), params.RUN_NAME)
+   publishalignmentqc(alignment_qcfile)
+
   //rna_qc
   rnaqc = rnaseqc_call(rna_rawbam.map{it -> tuple(it[0], it[1], it[3], it[4])}, params.genome_gtf_collapsed_file, params.genome_bed_file )
 
@@ -125,7 +127,7 @@ workflow {
                          tuple(params.genome_element_db, 'SAF', 'RE'))
   rna_withGN = rna_annot(rna_tagged,
                          tuple(params.genome_bin_file, 'SAF', 'BN'),
-                         tuple(params.genome_gtf_file, 'GTF', 'GN'))
+                         tuple(params.genome_saf_file, 'SAF', 'GN'))
   
   /* read and umi count with umi_tools based on a given tag */
   // DNA read and umi count per cell 
@@ -213,6 +215,5 @@ workflow {
   publishrnaqc(rnaqc.map{it -> it[3]})
   publishrnabinreadcount(rna_bin_read_merged_h5ad)
   publishrnabinumicount(rna_bin_umi_merged_h5ad)
-
 }
   

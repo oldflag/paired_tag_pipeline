@@ -35,7 +35,7 @@ process rnaseqc_call {
 
 
     """
-    rnaseqc $gtf_file $bam_file --bed $bed_file --sample $basename --coverage .
+    rnaseqc $gtf_file $bam_file --bed $bed_file --sample $basename --coverage . --unpaired
     """
 
   stub:

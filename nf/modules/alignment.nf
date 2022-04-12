@@ -158,22 +158,22 @@ process alignment_qc {
     bamname = bam_file.simpleName
     alignment_stats = bamname - '.bam' + '.alignment_stats.txt'
     """
-    samtools stats "${bam_file}" | egrep "reads mapped:|reads unmapped:|reads MQ0:" | cut -f2 > stats_tmp1
-    samtools view -h -q 20 "${bam_file}" | samtools stats | grep "reads mapped:" | sed 's/mapped:/mapped Q20:/' | cut -f2 >> stats_tmp1
-    ok_cell=$(samtools view -q 20 "${bam_file}" | cut -f1 | tr '|' '\t' | cut -f2 | tr ':' '\t' | awk '{print $2,$3}' | sort | uniq -c | awk '$1 >= 5000' | wc -l)
-    echo "N cells >= 5000 reads: ${ok_cell}" >> stats_tmp1
-    good_cell=$(samtools view -q 20 "${bam_file}" | cut -f1 | tr '|' '\t' | cut -f2 | tr ':' '\t' | awk '{print $2,$3}' | sort | uniq -c | awk '$1 >= 20000' | wc -l)
-    echo "N cells >= 20000 reads: ${good_cell}" >> stats_tmp1
+    samtools stats "${bam_file}" | egrep "reads mapped:|reads unmapped:|reads MQ0:" | cut -f2,3 > stats_tmp1
+    samtools view -h -q 20 "${bam_file}" | samtools stats | grep "reads mapped:" | sed 's/mapped:/mapped_Q20:/' | cut -f2,3 | awk '{print \$1"_"\$2,\$3}' >> stats_tmp1
+    ok_cell=\$(samtools view -q 20 "${bam_file}" | cut -f1 | tr '|' '\t' | cut -f2 | tr ':' '\t' | awk '{print \$2,\$3}' | sort | uniq -c | awk '\$1 >= 5000' | wc -l)
+    echo "N cells >= 5000 reads: \${ok_cell}" >> stats_tmp1
+    good_cell=\$(samtools view -q 20 "${bam_file}" | cut -f1 | tr '|' '\t' | cut -f2 | tr ':' '\t' | awk '{print \$2,\$3}' | sort | uniq -c | awk '\$1 >= 20000' | wc -l)
+    echo "N cells >= 20000 reads: \${good_cell}" >> stats_tmp1
     while read statline; do
-      statname=$(echo $statline | tr ':' '\t' | cut -f1 | sed 's/^\s\+//g')
-      statval=$(echo $statline | tr ':' '\t' | cut -f2 | sed 's/^\s\+//g')
-      echo "${sequence_id},${bamname},${seqtype},${assay},${antibody},${statname},${statval}" >> "${alignment_stats}"
+      statname=\$(echo \$statline | tr ':' '\t' | cut -f1 | sed 's/^\\s\\+//g')
+      statval=\$(echo \$statline | tr ':' '\t' | cut -f2 | sed 's/^\\s\\+//g')
+      echo "${sequence_id},${bamname},${seqtype},${assay},${antibody},\${statname},\${statval}" >> "${alignment_stats}"
     done < stats_tmp1
     rm stats_tmp1
     """
 
   stub:
-    bamname = bam_file.simpelName
+    bamname = bam_file.simpleName
     alignment_stats = bamname - '.bam' + '.alignment_stats.txt'
     """
     touch "${alignment_stats}"
@@ -194,13 +194,14 @@ process merge_alignment_qc {
     file merged_file
 
   script:
-    merged_file = base_name + '.alignment_qc.txt"
+    merged_file = base_name + ".alignment_qc.txt"
     """
-    cat "${qc_files}" > "${merged_file}"
+    cmd=\$(echo "cat ${qc_files} @ ${merged_file}" | tr '@' '>')
+    eval \$cmd
     """
 
   stub:
-    merged_file = base_name + '.alignment_qc.txt"
+    merged_file = base_name + ".alignment_qc.txt"
     """
     touch "${merged_file}"
     """
