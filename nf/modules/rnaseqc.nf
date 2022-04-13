@@ -3,6 +3,54 @@
  */
 nextflow.enable.dsl=2
 
+
+/*
+ * This defines a process for merging RNA-SeQC csv outputs
+ * into a single file, and generating a pdf
+ *
+ * Config-defined parameters:
+ * ----------------------------
+ * HOME_REPO - location of the repository
+ */
+process merge_rnaseqc {
+  conda params.HOME_REPO + '/nf/envs/skbio.yaml'  // piggyback on skbio for plotting packages
+
+  input:
+    file metrics_csv  // called with .collect()
+    val base_name
+
+  output:
+    file merged_metrics
+    file metrics_plots
+
+   script:
+     merged_metrics = base_name + '_RNASeQC_merged.csv'
+     metrics_plots = base_name + '_RNASeQC_merged.pdf'
+     new File('qclist.txt').withWriter { out ->
+         metrics_csv.each { out.println it }
+     }
+     """
+     hdr=0
+     while read qcf; do
+         if [ \$hdr -eq "0" ]; then
+             cat "\${qcf}" > "${merged_metrics}"
+             hdr=1
+         else
+             tail -n 1 "\${qcf}" >> "${merged_metrics}"
+         fi
+     done < qclist.txt
+
+     python "${params.HOME_REPO}/py/plot_rnaseqc.py" "${merged_metrics}" "${metrics_plots}"
+     """
+
+   stub:
+     merged_metrics = base_name + '_RNASeQC_merged.csv'
+     metrics_plots = base_name + '_RNASeQC_merged.pdf'
+     """
+     touch "${merged_metrics}" "${metrics_plots}"
+     """
+}
+
 /*
  * This defines a process for RNA QC using RNA-SeQC package
  *
@@ -21,12 +69,13 @@ process rnaseqc_call {
     file(bed_file)
 
   output:
-    tuple val(sequence_id), val(assay), val(antibody_name), file(metrics_tsv), file(exon_reads_gct), file(gene_reads_gct), file(gene_tpm_gct), file(gene_fragments_gct), file(coverage_tsv)
+    tuple val(sequence_id), val(assay), val(antibody_name), file(metrics_tsv), file(metrics_csv), file(exon_reads_gct), file(gene_reads_gct), file(gene_tpm_gct), file(gene_fragments_gct), file(coverage_tsv)
 
   script:
     
     basename = bam_file.simpleName
     metrics_tsv = "${basename}.metrics.tsv"
+    metrics_csv = "${basename}.metrics.csv"
     exon_reads_gct = "${basename}.exon_reads.gct" 
     gene_reads_gct = "${basename}.gene_reads.gct"
     gene_tpm_gct = "${basename}.gene_tpm.gct" 
@@ -36,6 +85,8 @@ process rnaseqc_call {
 
     """
     rnaseqc $gtf_file $bam_file --bed $bed_file --sample $basename --coverage . --unpaired
+    cut -f1 "${metrics_tsv}" | tr '\n' ',' | sed 's/,\$/\\n/g' > "${metrics_csv}"
+    cut -f2 "${metrics_tsv}" | tr '\n' ',' | sed 's/,\$/\\n/g' >> "${metrics_csv}"
     """
 
   stub:
