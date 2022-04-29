@@ -221,6 +221,7 @@ process merge_counts {
 
   output:
       file(merged_count_h5ad)
+      file(merged_count)
 
   script:
       merged_count_h5ad = "${file_header}"+'_merged.h5ad'
@@ -236,9 +237,10 @@ process merge_counts {
       """
   stub:
       merged_count_h5ad = "${file_header}"+'_merged.h5ad'
-
+      merged_count = "${file_header}"+'_merged.txt.gz'
       """
       touch "${merged_count_h5ad}"
+      touch "${merged_count}"
       """
 }
 

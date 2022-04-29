@@ -91,12 +91,12 @@ def get_group_map(pool_fasta, sample_digest_file, groups_per_sample, out_base, s
     for digest_record in digest_recs:
         assay_id, antibody = digest_record['assay_id'], digest_record['antibody_name']
         sample_out = list()
-        cpg = int(nw / groups_per_sample.get(digest_record['assay_id'], 1))
+        cpg = int(nw / groups_per_sample.get(digest_record['sample_id'], 1))
         rem = nw % cpg
         if rem > 0 and rem < cpg/2:
-            cpg = int(cpg + max(1, rem/groups_per_sample.get(digest_record['assay_id'], 1)))
+            cpg = int(cpg + max(1, rem/groups_per_sample.get(digest_record['sample_id'], 1)))
         rem = nw % cpg
-        for i, group_list in enumerate(grouped_product([digest_record['assay_id']], 
+        for i, group_list in enumerate(grouped_product([digest_record['sample_id']], 
                                        bc1_f, bc2_f, 
                                        n=cpg)):
             of = f'{out_base}__{assay_id}__{antibody}__{i+1}.fq.gz'
