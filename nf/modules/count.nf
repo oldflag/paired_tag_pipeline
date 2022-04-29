@@ -213,10 +213,11 @@ process annotate_multiple_features {
 
 process merge_counts {
   
-  conda params.HOME_REPO + '/nf/envs/umi_tools.yaml'
+  conda params.HOME_REPO + '/nf/envs/scanalysis.yaml'
 
   input:
       tuple file(count_files), val(file_header)
+      file sample_digest_csv
 
   output:
       file(merged_count_h5ad)
@@ -230,7 +231,7 @@ process merge_counts {
       """
       zcat $count_files | awk 'FNR!=1 && \$1=="gene" {next;}{print}' | gzip -c > "${merged_count}"
 
-      python "${params.HOME_REPO}/py/count2h5ad.py" "${merged_count}" "${merged_count_h5ad}"
+      python "${params.HOME_REPO}/py/count2h5ad.py" "${merged_count}" "${sample_digest_csv}" "${merged_count_h5ad}"
 
 
       """
@@ -241,4 +242,38 @@ process merge_counts {
       touch "${merged_count_h5ad}"
       touch "${merged_count}"
       """
+}
+
+/*
+ *
+ * This module defines a process to produce basic QC outputs from final read / umi counts
+ * 
+ * Config-defined parameters:
+ * -------------------------
+ *   + HOME_REPO : the path to the home repository
+ *   + RUN_NAME : the name of the run
+ */
+process h5ad_qc {
+  conda params.HOME_REPO + '/nf/envs/scanalysis.yaml'
+
+  input:
+    file rna_reads
+    file rna_umi
+    file dna_reads
+    file dna_umi
+
+  output:
+    file out_pdf
+
+  script:
+    out_pdf = "${params.RUN_NAME}_h5adqc.pdf"
+    """
+    python "${params.HOME_REPO}/py/h5ad_qc.py" "${rna_reads}" "${rna_umi}" "${dna_reads}" "${dna_umi}" "${out_pdf}"
+    """
+
+  stub:
+    out_pdf = "${params.RUN_NAME}_h5adqc.pdf"
+    """
+    touch $out_pdf
+    """
 }

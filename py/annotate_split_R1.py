@@ -60,7 +60,7 @@ def compute_cells_per_sample(bcfile):
     return total_cells, n_samples, cps 
 
 
-def get_group_map(pool_fasta, sample_digest_file, groups_per_sample, out_base, library_id, open_for_writing=True):
+def get_group_map(pool_fasta, sample_digest_file, groups_per_sample, out_base, sequence_id, open_for_writing=True):
     """
     Produce a dictionary of output handles for groups of cell ids
 
@@ -68,11 +68,11 @@ def get_group_map(pool_fasta, sample_digest_file, groups_per_sample, out_base, l
     ---------
     :pool_fasta: Fasta file of pool barcodes
     :sample_digest_file: csv-formatted digest file containing the fields
-                         `assay_id`, `antibody_name`, `sequence_library_id`, `barcode`, `well`
+                         `assay_id`, `antibody_name`, `sequence_id`, `barcode`, `well`
     :groups_per_sample: mapping {sample_id -> n_grp} number of fastq files per
                         sample to write
     :out_base: base for the output file-names
-    :library_id: the library id for this run (for matching in the sample digest)
+    :sequence_id: the library id for this run (for matching in the sample digest)
     :open_for_writing: Whether to return open file-handles or just the files. Used for testing
 
     Output
@@ -82,8 +82,11 @@ def get_group_map(pool_fasta, sample_digest_file, groups_per_sample, out_base, l
     """
     bc1_f, bc2_f = list(read_fasta(pool_fasta)), list(read_fasta(pool_fasta))
     nw = len(bc1_f) * len(bc2_f)
+    print(sequence_id)
+    from pprint import pprint
     digest_recs = [rec for rec in DictReader(open(sample_digest_file)) 
-                   if rec['sequence_library_id'] == library_id]
+                   if rec['sequence_id'] == sequence_id]
+    pprint(digest_recs)
     out_files, handles = list(), dict()
     for digest_record in digest_recs:
         assay_id, antibody = digest_record['assay_id'], digest_record['antibody_name']

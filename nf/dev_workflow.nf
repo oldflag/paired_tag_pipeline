@@ -44,14 +44,20 @@ params.genome_bin_file = file('/home/share/storages/2T/genome/mouse/GRCm39_1kb.s
 params.genome_gtf_file = file('/home/share/storages/2T/genome/mouse/gencode.vM28.annotation.gtf')
 params.genome_gtf_collapsed_file = file('/home/share/storages/2T/genome/mouse/gencode.vM28.annotation.collapsed.gtf')
 params.genome_bed_file = file('/home/share/storages/2T/genome/mouse/gencode.vM28.annotation.bed')
+params.enhancer_saf_file = file('/home/share/storages/2T/genome/mouse/GRCm39_Encode_Enhancers.saf')
+params.promoter_saf_file = file('/home/share/storages/2T/genome/mouse/GRCm39_Encode_Promoters.saf')
 params.genome_element_db = file('/home/chartl/projects/2022-02/annotation_files_for_dna/epimap/mmSDB.saf')
 params.count_ncores = 3
 params.macs_genome_type = "mm"
 
 // modules
 include { trim_fq_single } from params.HOME_REPO + '/nf/modules/trim'
-include { parse_pairedtag_r2; split_annot_r1; add_tags as tag1; add_tags as tag2} from params.HOME_REPO + '/nf/modules/pairedtag_reads'
-include { star_aligner_single; bwa_aligner_single } from params.HOME_REPO + '/nf/modules/alignment'
+include { parse_pairedtag_r2; 
+          split_annot_r1; 
+          add_tags as tag1; 
+          add_tags as tag2;
+          barcode_qc} from params.HOME_REPO + '/nf/modules/pairedtag_reads'
+include { star_aligner_single; bwa_aligner_single; alignment_qc; merge_alignment_qc } from params.HOME_REPO + '/nf/modules/alignment'
 include { rnaseqc_call } from params.HOME_REPO + '/nf/modules/rnaseqc'
 include { annotate_multiple_features as rna_annot; umitools_count as rna_count; umitools_count as rna_bin_count;
           merge_counts as dna_merge_read; merge_counts as dna_merge_umi; 
@@ -59,6 +65,7 @@ include { annotate_multiple_features as rna_annot; umitools_count as rna_count; 
           merge_counts as rna_merge_bin_read; merge_counts as rna_merge_bin_umi;
           merge_counts as peak_merge_read; merge_counts as peak_merge_umi } from params.HOME_REPO + '/nf/modules/count'
 include { annotate_multiple_features as dna_annot; umitools_count as dna_count} from params.HOME_REPO + '/nf/modules/count'
+include { annotate_multiple_features as cre_annot} from params.HOME_REPO + '/nf/modules/count'
 include { annotate_reads_with_features as peak_annot; umitools_count as peak_count } from params.HOME_REPO + '/nf/modules/count'
 include { merge_bams as merge_rnabams; merge_bams as merge_dnabams; merge_bams as merge_annodnabams; merge_bams as merge_annornabams } from params.HOME_REPO + '/nf/modules/alignment'
 include { MACS2_peakcall; merge_saf; chip_qc } from params.HOME_REPO + '/nf/modules/peaks'
@@ -156,13 +163,18 @@ workflow {
   rna_withGN = rna_annot(rna_tagged,
                          tuple(params.genome_bin_file, 'SAF', 'BN'),
                          tuple(params.genome_gtf_file, 'GTF', 'GN'))
+
+  // for dna, add encode enhancer/prmoter tags
+  dna_withEN = cre_annot(dna_withGN[0],
+                         tuple(params.encode_enhancer_file, 'SAF', 'EE'),
+                         tuple(params.encode_promoter_file, 'SAF', 'EP'))
   
   /* read and umi count with umi_tools based on a given tag */
   // in: (seq_id, bam, seq_type, assay_id, antibody), count_tag
   // out: (seq_id, count_tag, umi_counts_txt, read_counts_txt), log file
   
   // DNA read and umi count per cell 
-  dna_counts = dna_count(dna_withGN[0], 'BN')
+  dna_counts = dna_count(dna_withEN[0], 'BN')
   // RNA read and umi count per cell per gene
   rna_counts = rna_count(rna_withGN[0], 'GN')
   // RNA read and umi count per cell  

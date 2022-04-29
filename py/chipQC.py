@@ -11,7 +11,7 @@ Produces the following metrics:
   - median reads / cell
   - std reads / cell
   - aligned reads
-  - avg aligned /cell
+  - avg aligned / cell
   - median aligned /cell
   - std aligned / cell
   - # of called peaks
@@ -20,8 +20,16 @@ Produces the following metrics:
   - mean peak cvg
   - reads in peak
   - reads in peak / cell
-  - strand cross correlation  TODO -- THIS
-  - relative cross correlation TODO -- THIS
+
+Using the EE and EP tags:
+  - reads in enhancer
+  - reads in enhancer / cell
+  - reads in promoter
+  - reads in promoter / cell
+
+Using the GN (gene name) tags:
+  - reads in genebody
+  - reads in genebody / cell
 
 """
 
@@ -36,6 +44,12 @@ import sys
 
 STANDARD_CONTIGS = {'%d' % x for x in range(1, 26)} | {'X', 'Y'}
 STANDARD_CONTIGS |= {'chr%s' % u for u in STANDARD_CONTIGS}
+
+def safediv(a, b):
+    if b == 0:
+        return 0
+    else:
+        return a/b
 
 
 def get_args():
@@ -96,9 +110,17 @@ def iter_umi(samfile, verb=False):
 def cstats():
     return {
       'filtered_MQ30': {'in_peak': {'reads': 0, 'umi': 0},
-                        'off_target': {'reads': 0, 'umi': 0}},
+                        'off_target': {'reads': 0, 'umi': 0},
+                        'in_enhancer': {'reads': 0, 'umi': 0},
+                        'in_promoter': {'reads': 0, 'umi': 0},
+                        'in_genebody': {'reads': 0, 'umi': 0}
+                       },
       'retained': {'in_peak': {'reads': 0, 'umi': 0},
-                   'off_target': {'reads': 0, 'umi': 0}},
+                   'off_target': {'reads': 0, 'umi': 0},
+                   'in_enhancer': {'reads': 0, 'umi': 0},
+                   'in_promoter': {'reads': 0, 'umi': 0},
+                   'in_genebody': {'reads': 0, 'umi': 0}
+                  },
       'unmapped': {'reads': 0},
       'no_UMI': {'reads': 0}
     }
@@ -156,6 +178,8 @@ def compute_sample_stats(cell_stats):
     sample_stats = dict()
     for fc in cell_stats:
         sample, cell = fc.split('.', 1)
+        if cell == '_ALL_':
+            continue
         good_reads = cell_stats[fc]['retained']['in_peak']['reads'] + \
                      cell_stats[fc]['retained']['off_target']['reads']
         good_umi = cell_stats[fc]['retained']['in_peak']['umi'] + \
@@ -170,38 +194,72 @@ def compute_sample_stats(cell_stats):
         if sample not in sample_stats:
             sample_stats[sample] = {
                 'total_reads': list(),
-                'frac_MQ30_mapped_reads': list(),
-                'frac_mapped_in_peak_reads': list(),
+                'HQ_reads': list(),
                 'total_umi': list(),
-                'MQ30_mapped_umi': list(),
+                'HQ_umi': list(),
                 'umi_in_peak': list(),
-                'frac_umi_in_peak': list(),
-                'estimated_unmapped_umi': list()
+                'reads_in_peak': list(),
+                'estimated_unmapped_umi': list(),
+                'reads_in_enhancer': list(),
+                'reads_in_promoter': list(),
+                'reads_in_genebody': list(),
+                'umi_in_enhancer': list(),
+                'umi_in_promoter': list(),
+                'umi_in_genebody': list(),
+                'reads_in_CRE': list(),
+                'umi_in_CRE': list()
             }
         sample_stats[sample]['total_reads'].append(good_reads + filtered_reads + unmapped_reads)
         sample_stats[sample]['total_umi'].append(good_umi + filtered_umi)
-        sample_stats[sample]['estimated_unmapped_umi'].append((good_umi/good_reads) * unmapped_reads)
-        sample_stats[sample]['MQ30_mapped_umi'].append(good_umi)
-        sample_stats[sample]['frac_MQ30_mapped_reads'].append(div_(good_reads, good_reads + filtered_reads + unmapped_reads))
-        sample_stats[sample]['frac_mapped_in_peak_reads'].append(div_(good_on_target_reads, good_reads))
+        sample_stats[sample]['estimated_unmapped_umi'].append((good_umi/good_reads) * unmapped_reads if good_reads > 0 else -1)
+        sample_stats[sample]['HQ_umi'].append(good_umi)
+        sample_stats[sample]['HQ_reads'].append(good_reads)
         sample_stats[sample]['umi_in_peak'].append(good_on_target_umi)
-        sample_stats[sample]['frac_umi_in_peak'].append(div_(good_on_target_umi, good_umi))
+        sample_stats[sample]['reads_in_peak'].append(good_on_target_reads)
+        sample_stats[sample]['reads_in_enhancer'].append(cell_stats[fc]['retained']['in_enhancer']['reads'])
+        sample_stats[sample]['umi_in_enhancer'].append(cell_stats[fc]['retained']['in_enhancer']['umi'])
+        sample_stats[sample]['reads_in_promoter'].append(cell_stats[fc]['retained']['in_promoter']['reads'])
+        sample_stats[sample]['umi_in_promoter'].append(cell_stats[fc]['retained']['in_promoter']['umi'])
+        sample_stats[sample]['reads_in_genebody'].append(cell_stats[fc]['retained']['in_genebody']['reads'])
+        sample_stats[sample]['umi_in_genebody'].append(cell_stats[fc]['retained']['in_genebody']['umi'])
+        sample_stats[sample]['reads_in_CRE'].append(sample_stats[sample]['reads_in_enhancer'][-1] + \
+                                                    sample_stats[sample]['reads_in_promoter'][-1])
+        sample_stats[sample]['umi_in_CRE'].append(sample_stats[sample]['umi_in_enhancer'][-1] + \
+                                                  sample_stats[sample]['umi_in_promoter'][-1])
 
+    # define some further statistics
+    DERIVED_STATISTICS = {
+        'read_peak_rate': (('reads_in_peak', 'HQ_reads'), lambda x: safediv(x[0],x[1])),
+        'umi_peak_rate': (('umi_in_peak', 'HQ_umi'), lambda x: safediv(x[0], x[1])),
+        'read_enhancer_rate': (('reads_in_enhancer', 'HQ_reads'), lambda x: safediv(x[0], x[1])),
+        'umi_enhancer_rate': (('umi_in_enhancer', 'HQ_umi'), lambda x: safediv(x[0], x[1])),
+        'read_promoter_rate': (('reads_in_promoter', 'HQ_reads'), lambda x: safediv(x[0], x[1])),
+        'umi_promoter_rate': (('umi_in_promoter', 'HQ_umi'), lambda x: safediv(x[0], x[1])),
+        'read_CRE_rate': (('reads_in_CRE', 'HQ_reads'), lambda x: safediv(x[0], x[1])),
+        'umi_CRE_rate': (('umi_in_CRE', 'HQ_reads'), lambda x: safediv(x[0], x[1])),
+        'read_genic_rate': (('reads_in_genebody', 'HQ_reads'), lambda x: safediv(x[0], x[1])),
+        'umi_genic_rate': (('umi_in_genebody', 'HQ_umi'), lambda x: safediv(x[0], x[1])),
+        'enhancer_promoter_ratio': (('umi_in_enhancer', 'umi_in_promoter'), lambda x: safediv(x[0], x[1]))
+    } 
     sample_vals = dict()
     for sample in sample_stats:
         sample_vals[sample] = dict()
         umi_vec = sample_stats[sample]['total_umi']
         for key in sample_stats[sample]:
             cell_values = sample_stats[sample][key]
+            total = sum(sample_stats[sample][key]) 
             nobs = len(cell_values)
             cell_values = [x for x, c in zip(cell_values, umi_vec) if c >= 750]
+            filtered_total = sum(cell_values)
             m = div_(sum(cell_values), len(cell_values))
             vsorted = sorted(cell_values)
             i_25, i_50, i_75 = int(0.25*len(cell_values)), int(0.5*len(cell_values)), int(0.75*len(cell_values))
             if len(cell_values) > 0:
                 sample_vals[sample][key] = {
+                   'total': total,
                    'n_cell': nobs,
                    'n_well_covered': len(cell_values),
+                   'well_covered_total': filtered_total,
                    'min': min(cell_values),
                    'Q25': vsorted[i_25],
                    'median': vsorted[i_50],
@@ -213,7 +271,49 @@ def compute_sample_stats(cell_stats):
             else:
                 sample_vals[sample][key] = {
                    'n_cell': nobs,
+                   'total': total,
                    'n_well_covered': 0,
+                   'well_covered_total': 0,
+                   'min': 'NA',
+                   'Q25': 'NA',
+                   'median': 'NA',
+                   'Q75': 'NA',
+                   'max': 'NA',
+                   'mean': 'NA',
+                   'std': 'NA'
+                }
+
+        for statname, (keylst, statfx) in DERIVED_STATISTICS.items():
+            key_lists = [sample_stats[sample][k] for k in keylst]
+            cell_values = [statfx(x) for x in zip(*key_lists)]
+            total = statfx([sample_vals[sample][k]['total'] for k in keylst])
+            wc_total = statfx([sample_vals[sample][k]['well_covered_total'] for k in keylst])
+            nobs = len(cell_values)
+            cell_values = [x for x, c in zip(cell_values, umi_vec) if c >= 750]
+            filtered_total = sum(cell_values)
+            m = div_(filtered_total, len(cell_values))
+            vsorted = sorted(cell_values)
+            i_25, i_50, i_75 = int(0.25*len(cell_values)), int(0.5*len(cell_values)), int(0.75*len(cell_values))
+            if len(cell_values) > 0:
+                sample_vals[sample][statname] = {
+                    'total': total,
+                    'n_cell': nobs,
+                    'n_well_covered': len(cell_values),
+                    'well_covered_total': filtered_total,
+                    'min': min(cell_values),
+                    'Q25': vsorted[i_25],
+                    'median': vsorted[i_50],
+                    'Q75': vsorted[i_75],
+                    'max': max(cell_values),
+                    'mean': m,
+                    'std': sum(((x-m)**2 for x in cell_values))/len(cell_values)
+                }
+            else:
+                sample_vals[sample][statname] = {
+                   'n_cell': nobs,
+                   'total': total,
+                   'n_well_covered': 0,
+                   'well_covered_total': 0,
                    'min': 'NA',
                    'Q25': 'NA',
                    'median': 'NA',
@@ -253,6 +353,15 @@ def main(args):
             for read in reads:
                 k1 = 'retained' if read.mapq >= 30 else 'filtered_MQ30'
                 stat_counts[fcell][k1][k2]['reads'] += 1
+                if read.has_tag('EP'):
+                    stat_counts[fcell][k1]['in_promoter']['reads'] += 1
+                    stat_counts[fcell][k1]['in_promoter']['umi'] += (1 if u is False else 0)
+                elif read.has_tag('EE'):
+                    stat_counts[fcell][k1]['in_enhancer']['reads'] += 1
+                    stat_counts[fcell][k1]['in_enhancer']['umi'] += (1 if u is False else 0)
+                if read.has_tag('GN'):
+                    stat_counts[fcell][k1]['in_genebody']['reads'] += 1
+                    stat_counts[fcell][k1]['in_genebody']['umi'] += (1 if u is False else 0)
                 if k1 == 'retained' and u is False:
                     stat_counts[fcell][k1][k2]['umi'] += 1
                     u = True
@@ -269,7 +378,7 @@ def main(args):
             sample_id, cell = fullcell.split('.',1)
             library, sample, antibody, _ = sample_id.split('__') 
             for k1 in ('retained', 'filtered_MQ30'):
-                for k2 in ('in_peak', 'off_target'):
+                for k2 in ('in_peak', 'off_target', 'in_enhancer', 'in_promoter', 'in_genebody'):
                     for k3 in ('reads', 'umi'):
                         cct = stat_counts[fullcell][k1][k2][k3]
                         out.write(f'{sample_id}\t{library}\t{sample}\t{cell}\t{k1}\t{k2}\t{k3}\t{cct}\n')

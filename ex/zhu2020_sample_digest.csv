@@ -1,4 +1,4 @@
-sample_id,assay_id,pairedtag_run_id,antibody_name,dna_well,barcode,library_type,sequence_library_id,sra_run,fastq1,fastq2
+sample_id,assay_id,pairedtag_run_id,antibody_name,dna_well,barcode,library_type,library_id,sra_run,fastq1,fastq2
 Mouse01_spec_02_sm02,Mouse01_spec_02_sm02_a28,ZhuPaired_run01_assay10,H3K27ac,10,TACG,dna,ZhuDNA_lib33,SRR11953251,SRR11953251_1.fastq.gz,SRR11953251_2.fastq.gz
 MouseMix_01_02_spec_01_sm01,MouseMix_01_02_spec_01_sm01_a25,ZhuPaired_run01_assay09,H3K27ac,09,GTTG,dna,ZhuDNA_lib33,SRR11953251,SRR11953251_1.fastq.gz,SRR11953251_2.fastq.gz
 Mouse02_spec_01_sm01,Mouse02_spec_01_sm01_a04,ZhuPaired_run01_assay02,H3K4me1,02,AGCT,dna,ZhuDNA_lib33,SRR11953251,SRR11953251_1.fastq.gz,SRR11953251_2.fastq.gz

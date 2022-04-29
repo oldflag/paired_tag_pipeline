@@ -39,6 +39,15 @@ process MACS2_peakcall {
     cat "${narrow_peaks}" "${broad_peaks}" | cut -f1-5 | bedtools sort -i /dev/stdin | bedtools merge -i /dev/stdin > "${merged_peaks}"
     echo "GeneID	Chr	Start	End	Strand" > "${peaks_saf}"
     cat "${merged_peaks}" | awk '{print "${antibody_name}_Peak."NR"@"\$1":"\$2":"\$3"\t"\$1"\t"\$2"\t"\$3"\t."}' >> "${peaks_saf}"
+      nl=\$(cat ${peaks_saf} | wc -l)
+      if [ "\${nl}" -eq "1" ]; then
+          # just the header
+          if [ "${params.macs_genome_type}" -eq "hs" ]; then
+              echo "nopeak	1	15000000	16000000	." >> ${peaks_saf}
+          else
+              echo "nopeak	chr1	15000000	16000000	." >> ${peaks_saf}
+          fi
+      fi
     rm "${filt_bam}"
     """
 
@@ -114,3 +123,62 @@ process chip_qc {
     touch "${cell_stats}" "${sample_stats}"
     """
 }
+
+/*
+ * This module defines a process for merging ChipSeq QC metrics and
+ * producing QC plots
+ *
+ * Config-defined parameters
+ * -----------------------------
+ * HOME_REPO - location of the repository
+ */
+process merge_chip_qc {
+  conda params.HOME_REPO + '/nf/envs/skbio.yaml'
+
+  input:
+    file chipqc_sample  // expected that .collect() is run. 
+    file chipqc_cell // expected that .collect() is run
+    val output_base
+
+  output:
+    file chipseq_merged_sample
+    file chipseq_merged_cell
+    file chipseq_plots
+
+  script:
+    chipseq_merged_sample = "${output_base}.sample_chipQC.txt"
+    chipseq_merged_cell = "${output_base}.cell_chipQC.txt"
+    chipseq_plots = "${output_base}.chipQC.pdf"
+    """
+    hdr=0
+    find . -name '*_cell.txt' > infiles
+    while read inf; do
+        if [ "\${hdr}" -eq "0" ]; then
+            cat \$inf > "${chipseq_merged_cell}"
+            hdr=1
+        else
+            tail -n +2 \$inf >> "${chipseq_merged_cell}"
+        fi
+    done < infiles
+    hdr=0
+    find . -name '*_sample.txt' > infiles
+    while read inf; do
+        if [ "\${hdr}" -eq "0" ]; then
+            cat \$inf > "${chipseq_merged_sample}"
+            hdr=1
+        else
+            tail -n +2 \$inf >> "${chipseq_merged_sample}"
+        fi
+    done < infiles
+    python "${params.HOME_REPO}/py/chipqc_plots.py" "${chipseq_merged_cell}" "${chipseq_merged_sample}" "${chipseq_plots}"
+    """
+
+  stub:
+    chipseq_merged_sample = "${output_base}.sample_chipQC.txt"
+    chipseq_merged_cell = "${output_base}.cell_chipQC.txt"
+    chipseq_plots = "${output_base}.chipQC.pdf"
+    """
+    touch "${chipseq_plots}" "${chipseq_merged_sample}" "${chipseq_merged_cell}"
+    """
+}
+  
