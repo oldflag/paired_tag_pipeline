@@ -47,7 +47,7 @@ process parse_pairedtag_r2 {
  * 
  * Config-defined parameters
  * ----------------------------
- *  + py_dir: path to the root python directory of the 'pipeliens' repo
+ *  + py_dir: path to the root python directory of the 'pipelines' repo
  *
  */
 process barcode_qc {

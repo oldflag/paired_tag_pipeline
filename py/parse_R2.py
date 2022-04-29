@@ -278,7 +278,7 @@ def basename(fn):
 
 def get_sample_seqs(fasta_or_digest, input_fastq):
     if fasta_or_digest[-4:] == '.csv':
-        records = DictReader(open(fasta_or_digest))
+        records = [r for r in DictReader(open(fasta_or_digest))]
         print(records)
         records = [r for r in records if basename(r['fastq2']) == basename(input_fastq)]
         print(records)

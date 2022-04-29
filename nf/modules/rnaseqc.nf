@@ -26,10 +26,8 @@ process merge_rnaseqc {
    script:
      merged_metrics = base_name + '_RNASeQC_merged.csv'
      metrics_plots = base_name + '_RNASeQC_merged.pdf'
-     new File('qclist.txt').withWriter { out ->
-         metrics_csv.each { out.println it }
-     }
      """
+     find . -name '*.csv' > qclist.txt
      hdr=0
      while read qcf; do
          if [ \$hdr -eq "0" ]; then
@@ -85,14 +83,15 @@ process rnaseqc_call {
 
     """
     rnaseqc $gtf_file $bam_file --bed $bed_file --sample $basename --coverage . --unpaired
-    cut -f1 "${metrics_tsv}" | tr '\n' ',' | sed 's/,\$/\\n/g' > "${metrics_csv}"
-    cut -f2 "${metrics_tsv}" | tr '\n' ',' | sed 's/,\$/\\n/g' >> "${metrics_csv}"
+    cut -f1 "${metrics_tsv}" | sed 's/, /_/g' | tr '\n' ',' | sed 's/,\$/\\n/g' > "${metrics_csv}"
+    cut -f2 "${metrics_tsv}" | sed 's/, /_/g' | tr '\n' ',' | sed 's/,\$/\\n/g' >> "${metrics_csv}"
     """
 
   stub:
 
     basename = bam_file.simpleName
     metrics_tsv = "${basename}.metrics.tsv"
+    metrics_csv = "${basename}.metrics.csv"
     exon_reads_gct = "${basename}.exon_reads.gct" 
     gene_reads_gct = "${basename}.gene_reads.gct"
     gene_tpm_gct = "${basename}.gene_tpm.gct" 
@@ -101,6 +100,7 @@ process rnaseqc_call {
 
     """
     touch ${basename}.metrics.tsv
+    touch ${basename}.metrics.csv
     touch ${basename}.exon_reads.gct 
     touch ${basename}.gene_reads.gct
     touch ${basename}.gene_tpm.gct 

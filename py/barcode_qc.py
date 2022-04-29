@@ -51,6 +51,8 @@ def main(args):
     pdf.savefig()
     plt.figure()
 
+    library_total_reads = acounts[acounts.assignment == str_A].reads
+
     scounts = records.groupby(['sample', 'assignment'])['reads'].sum().reset_index()
     sbn.barplot(x='sample', y='reads', hue='assignment', data=scounts[scounts['sample'] != '*'])
     plt.xticks(rotation=90)
@@ -100,6 +102,26 @@ def main(args):
     plt.bar(dat_cdf_persample.columns[1:], dat_cdf_persample.values[i_nr_closest,1:])
     plt.xticks(rotation=90);
     plt.xlabel('Sample'); plt.ylabel('# Of Cells with >= %d reads' % nr_closest)
+    plt.rc('axes', titlesize=10, labelsize=8)
+    plt.tick_params(labelsize=6)
+
+    plt.tight_layout()
+    pdf.savefig()
+    plt.figure()
+   
+    expected_per_60mil = 2500
+    adjust_factor = float(library_total_reads) / 60000000
+    good_covg = int(0.5 + expected_per_60mil * adjust_factor)
+
+
+    i_nr_closest = np.argmin(np.abs(dat_cdf_persample.n_reads-good_covg))
+    nr_closest = dat_cdf_persample.n_reads.values[i_nr_closest]
+    
+    print('EP60: %d, adjust: %f, final: %d, nr_c: %d' % (expected_per_60mil, adjust_factor, good_covg, nr_closest))
+
+    plt.bar(dat_cdf_persample.columns[1:], dat_cdf_persample.values[i_nr_closest,1:])
+    plt.xticks(rotation=90);
+    plt.xlabel('Sample'); plt.ylabel('# Of Cells with >= %d Reads\n(Well-covered, adjusted for total reads)' % nr_closest)
     plt.rc('axes', titlesize=10, labelsize=8)
     plt.tick_params(labelsize=6)
 

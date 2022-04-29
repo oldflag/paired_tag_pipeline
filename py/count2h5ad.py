@@ -16,10 +16,14 @@ import numpy as np
 from utils import xopen
 from collections import OrderedDict
 
+def safeget(dct, itm):
+    return dct.get(itm, 'NA')
+
 
 def get_args():
     parser = ArgumentParser('count2h5')
     parser.add_argument('counts', help='Output 3-column counts file (e.g. from UMI count)')
+    parser.add_argument('sample_digest', help='The sample digest CSV file containing sequence ID and library information, will be added to `.obs`')
     parser.add_argument('h5', help='The output h5ad file')
     parser.add_argument('--split_feature', help='In the case of multiple features, redistribute single counts proportionally', action='store_true')
 
@@ -66,15 +70,32 @@ def main(args):
     data_type = float if args.split_feature else int
                
     data, row_ind, col_ind = np.array(data, dtype=data_type), np.array(row_ind, dtype=int), np.array(col_ind, dtype=int)
+    sample_info = pd.read_csv(args.sample_digest)
+    sample_info.loc[:, 'sample_key'] = sample_info.assay_id + '_' + sample_info.sequence_id
+    print(sample_info.head().to_string())
 
     X = scipy.sparse.csr_matrix((data, (row_ind, col_ind)))
     col_meta = pd.DataFrame({'feature_name': list(col_map.keys())})
-    row_meta = pd.DataFrame({'cell_id': list(row_map.keys()),
-                             'sample_id': [get_sid(x) for x in row_map],
+    row_meta = pd.DataFrame({'atom_id': list(row_map.keys()),
                              'feature_count': [cell_features[x] for x in row_map],
                              'molecule_count': [cell_counts[x] for x in row_map]})
+    row_meta.loc[:, 'sequence_id'] = row_meta.atom_id.map(lambda x: x.split(':')[0])
+    row_meta.loc[:, 'antibody_name'] = row_meta.atom_id.map(lambda x: x.split(':')[1])
+    row_meta.loc[:, 'sample_id'] = row_meta.atom_id.map(lambda x: x.split(':')[2])
+    row_meta.loc[:, 'well1_id'] = row_meta.atom_id.map(lambda x: x.split(':')[3])
+    row_meta.loc[:, 'well2_id'] = row_meta.atom_id.map(lambda x: x.split(':')[4])
+    row_meta.loc[:, 'sample_key'] = row_meta.sample_id + '_' + row_meta.sequence_id
     print(row_meta.head().to_string())
-
+    # add in metadata
+    for cname in sample_info.columns:
+        if cname in {'sequence_id', 'antibody_name', 'sample_id', 'sample_key'}:
+            continue
+        mapping = dict(zip(sample_info.sample_key, sample_info.loc[:, cname]))
+        row_meta.loc[:, cname] = np.array(row_meta.sample_key.map(lambda x: safeget(mapping, x)).values, dtype=str)
+    row_meta.loc[:, 'cell_id'] = row_meta.sample_id + ':' + row_meta.antibody_name + ':' + row_meta.library_id + ':' + row_meta.well1_id + ':' + row_meta.well2_id
+    print(row_meta.head().to_string())
+    for cn in row_meta.columns:
+        print('%s -> %s' % (cn, row_meta.loc[:, cn].dtype.__repr__()))
     anndat = AnnData(X, row_meta, col_meta)
     anndat.write_h5ad(args.h5, compression='gzip')
 
