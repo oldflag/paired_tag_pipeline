@@ -213,22 +213,22 @@ workflow {
   peak_umi_merged_h5ad = peak_merge_umi(p_umi_input, SAMPLE_DIGEST)
 
   // qc the final h5ad
-  h5_pdf = h5ad_qc(rna_read_merged_h5ad, rna_umi_merged_h5ad, dna_read_merged_h5ad, dna_umi_merged_h5ad)
+  h5_pdf = h5ad_qc(rna_read_merged_h5ad[0], rna_umi_merged_h5ad[0], dna_read_merged_h5ad[0], dna_umi_merged_h5ad[0])
   
   // publish results
   publishdnabam(annodna_mg[0].map{ it -> it[0]})
   publishrnabam(annorna_mg[0].map{ it -> it[0]})
-  publishdnareadcount(dna_read_merged_h5ad)
-  publishdnaumicount(dna_umi_merged_h5ad)
-  publishrnareadcount(rna_read_merged_h5ad)
-  publishrnaumicount(rna_umi_merged_h5ad)
-  publishdnapeakreadcount(peak_read_merged_h5ad)
-  publishdnapeakumicount(peak_umi_merged_h5ad)
+  publishdnareadcount(dna_read_merged_h5ad[0])
+  publishdnaumicount(dna_umi_merged_h5ad[0])
+  publishrnareadcount(rna_read_merged_h5ad[0])
+  publishrnaumicount(rna_umi_merged_h5ad[0])
+  publishdnapeakreadcount(peak_read_merged_h5ad[0])
+  publishdnapeakumicount(peak_umi_merged_h5ad[0])
 
   //publish QCs 
   publishrnaqc(rnaqc_mg[1])
-  publishrnabinreadcount(rna_bin_read_merged_h5ad)
-  publishrnabinumicount(rna_bin_umi_merged_h5ad)
+  publishrnabinreadcount(rna_bin_read_merged_h5ad[0])
+  publishrnabinumicount(rna_bin_umi_merged_h5ad[0])
   publishchipqc(chip_qc_mg[2])
   publishh5adqc(h5_pdf)
 }
