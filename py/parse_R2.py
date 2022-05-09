@@ -176,7 +176,7 @@ def extract_barcodes(seq, linker1, linker2, lumi, lbc, lsn, lln):
     if l1['target_begin'] < lumi + lbc:
         # skipped base in UMI or barcode -- assume UMI
         bc1 = seq[(l1['target_begin']-lbc):l1['target_begin']]
-        d_ = lumi + lbc - l1['target_begin']
+        d_ = min(lumi, lumi + lbc - l1['target_begin'])
         umi = 'N' * d_ + seq[:(lumi-d_)]
     else:
         umi, bc1 = seq[:lumi], seq[lumi:(lumi + lbc)]
