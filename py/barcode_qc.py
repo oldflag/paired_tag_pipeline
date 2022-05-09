@@ -213,11 +213,12 @@ def main(args):
 
     plt.figure(figsize=(16,16))
     hm_dat = dat[dat.reads >= 2500].groupby(['well1', 'well2'])['reads'].count().reset_index()
-    hm_dat = hm_dat.pivot(index='well1', columns='well2', values='reads').fillna(0)
-    sbn.heatmap(hm_dat, annot=False, cmap='gist_heat')
-    title('# Of samples achieiving >= 2,500 reads: Split wells')
-    plt.tight_layout()
-    pdf.savefig()
+    if hm_dat.shape[0] >= 5:
+        hm_dat = hm_dat.pivot(index='well1', columns='well2', values='reads').fillna(0)
+        sbn.heatmap(hm_dat, annot=False, cmap='gist_heat')
+        title('# Of samples achieiving >= 2,500 reads: Split wells')
+        plt.tight_layout()
+        pdf.savefig()
 
     pdf.close()
 

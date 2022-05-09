@@ -96,7 +96,7 @@ def get_group_map(pool_fasta, sample_digest_file, groups_per_sample, out_base, s
         if rem > 0 and rem < cpg/2:
             cpg = int(cpg + max(1, rem/groups_per_sample.get(digest_record['sample_id'], 1)))
         rem = nw % cpg
-        for i, group_list in enumerate(grouped_product([digest_record['sample_id']], 
+        for i, group_list in enumerate(grouped_product([digest_record['assay_id']], 
                                        bc1_f, bc2_f, 
                                        n=cpg)):
             of = f'{out_base}__{assay_id}__{antibody}__{i+1}.fq.gz'
@@ -107,7 +107,7 @@ def get_group_map(pool_fasta, sample_digest_file, groups_per_sample, out_base, s
 
     sys.stderr.write(f'Writing to {len(out_files) + 2} fastQ files\n') 
     unknown_barcode = f'{out_base}__unknown__unlinked__1.fq.gz'
-    unknown_sample = 'f{out_base}__sample__unlinked__1.fq.gz'
+    unknown_sample = f'{out_base}__sample__unlinked__1.fq.gz'
     ubh = dxopen(unknown_barcode, 'wt') if open_for_writing else unknown_barcode
     ush = dxopen(unknown_sample, 'wt') if open_for_writing else unknown_sample
 
