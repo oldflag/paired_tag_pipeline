@@ -135,14 +135,15 @@ process annotate_multiple_features {
 
   output:
     tuple val(sequence_id), file(merged_bam), val(seqtype), val(assay_id), val(antibody)
+    tuple val(sequence_id), file(count_file1), file(count_file2)
     tuple file(fc_log), file(merge_log)
 
   script:
     bamname = bam_file.simpleName
-    count_file1 = bamname - '.bam' + '.fc_count1.txt'
     annot_bam1 = bamname - '.bam' + '_annot1.bam'
-    count_file2 = bamname - '.bam' + '.fc_count2.txt'
     annot_bam2 = bamname - '.bam' + '_annot2.bam'
+    count_file1 = bamname - '.bam' + '.fc_count.' + destination_tag1 + '.txt'
+    count_file2 = bamname - '.bam' + '.fc_count.' + destination_tag2 + '.txt'
     fc_log = bamname - '.bam' + '_multi_annot.log'
     merge_log = bamname - '.bam' + '_tag_merge.log'
     merged_bam = bamname - '.bam' + '_multiAnnot.bam'
@@ -186,10 +187,10 @@ process annotate_multiple_features {
 
   stub:
     bamname = bam_file.simpleName
-    count_file1 = bamname - '.bam' + '.fc_count1.txt'
     annot_bam1 = bamname - '.bam' + '_annot1.bam'
-    count_file2 = bamname - '.bam' + '.fc_count2.txt'
     annot_bam2 = bamname - '.bam' + '_annot2.bam'
+    count_file1 = bamname - '.bam' + '.fc_count.' + destination_tag1 + '.txt'
+    count_file2 = bamname - '.bam' + '.fc_count.' + destination_tag2 + '.txt'
     fc_log = bamname - '.bam' + '_multi_annot.log'
     merge_log = bamname - '.bam' + '_tag_merge.log'
     merged_bam = bamname - '.bam' + '_multiAnnot.bam'
@@ -220,8 +221,8 @@ process merge_counts {
       file sample_digest_csv
 
   output:
-      file(merged_count_h5ad)
-      file(merged_count)
+      file merged_count_h5ad
+      file merged_count
 
   script:
       merged_count_h5ad = "${file_header}"+'_merged.h5ad'
@@ -242,6 +243,38 @@ process merge_counts {
       touch "${merged_count_h5ad}"
       touch "${merged_count}"
       """
+}
+
+/*
+ * This module defines a process to convert a scanpy-formatted h5ad
+ * file (/X /obs /var); into a 10x-formatted h5ad file (/matrix
+ * /matrix/barcodes etc) that is compliant with Signac
+ *
+ * Config-defined parameters:
+ * --------------------------
+ *   + HOME_REPO : the path to the home repository
+ */
+process scanpy_to_signac {
+  conda params.HOME_REPO + '/nf/envs/seurat.yaml'
+
+  input:
+    file dna_h5ad
+    val genome_name
+
+  output:
+    file dna_10x
+
+  script:
+    dna_10x = (dna_h5ad.toString() - '.h5ad' + '_10x_format.h5')
+    """
+    Rscript $params.HOME_REPO/R/scanpy_to_10x.R $dna_h5ad $dna_10x $genome_name
+    """
+
+  stub:
+    dna_10x = (dna_h5ad.toString() - '.h5ad' + '_10x_format.h5')
+    """
+    touch $dna_10x
+    """
 }
 
 /*

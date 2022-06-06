@@ -92,11 +92,48 @@ with PdfPages(args.out_pdf) as pdf:
     plt.gca().set_yscale('log')
     plt.gca().set_xscale('log')
     pdf.savefig()
+    plt.figure()
+    print(' .. .. umi vs reads/umi')
+    plt.scatter(cell_stats.total_umi, cell_stats.reads_per_umi, marker='.')
+    plt.xlabel('Total UMI'); plt.ylabel('Reads per UMI'); plt.title('Reads per UMI by Total UMI (per cell)\nAll libraries')
+    plt.gca().set_yscale('log')
+    plt.gca().set_xscale('log')
+    plt.gca().set_rasterized(True);plt.savefig(pdf, format='pdf', dpi=250)
+    plt.figure(figsize=(8,6))
+    plt.figure(figsize=(8,6))
+    print(' .. .. umi vs reads/umi (colored)')
+    # pass 1: compute the mean reads / umi
+    rpu = cell_stats[cell_stats.total_umi >= 750].groupby('library')['reads_per_umi'].mean().reset_index()
+    new_names = {lib: '%s [RPU=%.2f]' % (lib, rpu) for lib, rpu in zip(rpu.library, rpu.reads_per_umi)}
+    libs_sorted = rpu.library[np.argsort(rpu.reads_per_umi)]
+    umi_min=cell_stats.total_umi.min()
+    umi_max=cell_stats.total_umi.max()
+    for lib in libs_sorted:
+        csub=cell_stats[(cell_stats.total_umi > 250) & (cell_stats.library == lib)].copy()
+        plt.scatter(csub.total_umi, 1./csub.reads_per_umi, marker='.', label=new_names[lib])
+        csub=csub[csub.total_umi >= 750]
+        if csub.shape[0] > 0:
+            mean_rpu = np.mean(1./csub.reads_per_umi)
+        plt.plot((umi_min, umi_max), (mean_rpu, mean_rpu))
+    plt.xlabel('Total UMI in cell'); plt.ylabel('UMI per read for cell'); plt.title('Reads per UMI by Total UMI (per cell)\nAll libraries')
+    #plt.gca().set_yscale('log')
+    plt.gca().set_xscale('log')
+    plt.legend(bbox_to_anchor=(1,1.00))
+    plt.tight_layout()
+    plt.gca().set_rasterized(True);plt.savefig(pdf, format='pdf', dpi=250)
     plt.figure(figsize=(12,8))
     print(' .. .. reads per umi : sample boxplot')
     sbn.boxplot(x='sample', y='reads_per_umi', hue='library', data=cell_stats)
     plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250)
     pdf.savefig()
+    plt.figure(figsize=(8,6))
+    cell_stats.loc[:,'umi_per_read'] = 1/cell_stats.reads_per_umi
+    cell_stats.loc[:,'total_reads_log'] = np.log10(cell_stats.total_reads)
+    cell_stats
+    sbn.lmplot(x='total_reads_log', y='umi_per_read', hue='library',
+               data=cell_stats[cell_stats.total_umi >= 500])
+    plt.xlabel('Total Reads (log10)'); plt.ylabel('UMI per Read')
+    plt.gca().set_rasterized(True);plt.savefig(pdf, format='pdf', dpi=250)
     plt.figure(figsize=(12,8))
     print('.. .. total umi per cell, violin')
     sbn.violinplot(x='sample', y='total_umi', hue='library', data=cell_stats)
