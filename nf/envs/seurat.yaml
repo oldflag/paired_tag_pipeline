@@ -1,0 +1,9 @@
+name: seurat
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - r-seurat
+  - scanpy
+  - seaborn
+prefix: /home/chartl/anaconda3/envs/seurat
