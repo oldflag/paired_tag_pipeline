@@ -14,7 +14,7 @@ nextflow.enable.dsl=2
  *   + count_ncores : the number of cores to use for counting
  */
 process annotate_reads_with_features {
-  conda params.HOME_REPO + '/nf/envs/featurecounts.yaml'
+  // conda params.HOME_REPO + '/nf/envs/featurecounts.yaml'
   input:
     tuple val(sequence_id), file(bam_file), file(annotation_file), val(annotation_type)  // annotation_type : 'SAF' or 'GTF'
     val annotation_name  // e.g., 'genes', 'enhancers', 'bins'
@@ -70,7 +70,7 @@ process annotate_reads_with_features {
  *
  */
 process umitools_count {
-  conda params.HOME_REPO + '/nf/envs/umi_tools.yaml'
+  // conda params.HOME_REPO + '/nf/envs/umi_tools.yaml'
   input:
       tuple val(sequence_id), file(annot_bam), val(seqtype), val(assay_id), val(antibody)
       val count_tag
@@ -127,11 +127,12 @@ process umitools_count {
 
 
 process annotate_multiple_features {
-  conda params.HOME_REPO + '/nf/envs/featurecounts.yaml'
+  // conda params.HOME_REPO + '/nf/envs/featurecounts.yaml'
   input:
     tuple val(sequence_id), file(bam_file), val(seqtype), val(assay_id), val(antibody)
     tuple file(annotation_file1), val(annotation_type1), val(destination_tag1)
     tuple file(annotation_file2), val(annotation_type2), val(destination_tag2)
+    file(HOME_REPO)
 
   output:
     tuple val(sequence_id), file(merged_bam), val(seqtype), val(assay_id), val(antibody)
@@ -174,7 +175,7 @@ process annotate_multiple_features {
     samtools sort tmp.bam > "${annot_bam2}"
     rm "fc_out/${bamname}.bam.featureCounts.bam" tmp.bam
 
-    pyf="${params.HOME_REPO}/py/combine_tags.py"
+    pyf="${HOME_REPO}/py/combine_tags.py"
 
     samtools index "${annot_bam1}"
     samtools index "${annot_bam2}"
@@ -213,11 +214,12 @@ process annotate_multiple_features {
 
 process merge_counts {
   
-  conda params.HOME_REPO + '/nf/envs/scanalysis.yaml'
+  // conda params.HOME_REPO + '/nf/envs/scanalysis.yaml'
 
   input:
       tuple file(count_files), val(file_header)
       file sample_digest_csv
+      file HOME_REPO
 
   output:
       file(merged_count_h5ad)
@@ -231,7 +233,7 @@ process merge_counts {
       """
       zcat $count_files | awk 'FNR!=1 && \$1=="gene" {next;}{print}' | gzip -c > "${merged_count}"
 
-      python "${params.HOME_REPO}/py/count2h5ad.py" "${merged_count}" "${sample_digest_csv}" "${merged_count_h5ad}"
+      python "${HOME_REPO}/py/count2h5ad.py" "${merged_count}" "${sample_digest_csv}" "${merged_count_h5ad}"
 
 
       """
@@ -254,13 +256,14 @@ process merge_counts {
  *   + RUN_NAME : the name of the run
  */
 process h5ad_qc {
-  conda params.HOME_REPO + '/nf/envs/scanalysis.yaml'
+  // conda params.HOME_REPO + '/nf/envs/scanalysis.yaml'
 
   input:
     file rna_reads
     file rna_umi
     file dna_reads
     file dna_umi
+    file HOME_REPO
 
   output:
     file out_pdf
@@ -268,7 +271,7 @@ process h5ad_qc {
   script:
     out_pdf = "${params.RUN_NAME}_h5adqc.pdf"
     """
-    python "${params.HOME_REPO}/py/h5ad_qc.py" "${rna_reads}" "${rna_umi}" "${dna_reads}" "${dna_umi}" "${out_pdf}"
+    python "${HOME_REPO}/py/h5ad_qc.py" "${rna_reads}" "${rna_umi}" "${dna_reads}" "${dna_umi}" "${out_pdf}"
     """
 
   stub:

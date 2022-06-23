@@ -18,10 +18,15 @@
  */
 process parse_pairedtag_r2 {
 
-  conda params.HOME_REPO + '/nf/envs/skbio.yaml'
+  // conda params.HOME_REPO + '/nf/envs/skbio.yaml'
 
   input:
     tuple val(sequence_id), file(r2_fastq)
+    file pydir
+    file combin_barcodes
+    file sample_barcodes
+    file linker_file
+
 
   output:
     tuple val(sequence_id), file(barcode_csv)
@@ -30,7 +35,7 @@ process parse_pairedtag_r2 {
     barcode_csv = "${sequence_id}.barcodes.csv.gz"
 
     """
-    python "${params.py_dir}"/parse_R2.py --threads "${params.r2_parse_threads}" --umi_size "${params.umi_len}" "${r2_fastq}" "${params.combin_barcodes}" "${params.sample_barcodes}" "${params.linker_file}" "${barcode_csv}"
+    python "${pydir}"/parse_R2.py --threads "${params.r2_parse_threads}" --umi_size "${params.umi_len}" "${r2_fastq}" "${combin_barcodes}" "${sample_barcodes}" "${linker_file}" "${barcode_csv}"
     """
 
   stub:
@@ -51,7 +56,7 @@ process parse_pairedtag_r2 {
  *
  */
 process barcode_qc {
-  conda params.HOME_REPO + '/nf/envs/skbio.yaml'
+  // conda params.HOME_REPO + '/nf/envs/skbio.yaml'
   
   input:
     tuple val(sequence_id), file(barcode_csv)
@@ -88,6 +93,9 @@ process barcode_qc {
 process split_annot_r1 {
   input:
     tuple val(sequence_id), file(r1_trim_fq), file(barcode_csv)
+    file py_dir
+    file combin_barcodes
+    file sample_barcodes
 
   output:
     val sequence_id
@@ -96,7 +104,7 @@ process split_annot_r1 {
   script:
     """
     mkdir -p out
-    python "${params.py_dir}/annotate_split_R1.py" "${r1_trim_fq}" "${barcode_csv}" "${params.combin_barcodes}" "${params.sample_barcodes}" --outdir out --sequence_id "${sequence_id}" --noestimate
+    python "${py_dir}/annotate_split_R1.py" "${r1_trim_fq}" "${barcode_csv}" "${combin_barcodes}" "${sample_barcodes}" --outdir out --sequence_id "${sequence_id}" --noestimate
 
     nul=\$(zcat out/*__unknown__unlinked__1.fq.gz | wc -l)
     if [ "\${nul}" -lt "12" ]; then
@@ -120,10 +128,11 @@ process split_annot_r1 {
 }
 
 process add_tags {
-  conda params.HOME_REPO + '/nf/envs/bwa.yaml'
+  // conda params.HOME_REPO + '/nf/envs/bwa.yaml'
   
   input:
     tuple val(alignment_id), file(bam_file), val(seqtype), val(assay_id), val(antibody)
+    file(py_dir)
 
   output:
     tuple val(alignment_id), file(annot_bam_file), val(seqtype), val(assay_id), val(antibody)
@@ -132,7 +141,7 @@ process add_tags {
     unsorted_bam = bam_file.simpleName - '.bam' + '_tag_uns.bam'
     annot_bam_file = bam_file.simpleName - '.bam' + '_tag.bam'
     """
-    python "${params.py_dir}"/add_tags.py "${bam_file}" "${unsorted_bam}" --library "${alignment_id}" --antibody "${antibody}"
+    python "${py_dir}"/add_tags.py "${bam_file}" "${unsorted_bam}" --library "${alignment_id}" --antibody "${antibody}"
     samtools sort "${unsorted_bam}" -o "${annot_bam_file}"
     """
 

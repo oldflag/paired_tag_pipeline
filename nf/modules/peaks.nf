@@ -14,7 +14,7 @@ nextflow.enable.dsl=2
  *
  */
 process MACS2_peakcall {
-  conda params.HOME_REPO  + '/nf/envs/macs2.yaml'
+  // conda params.HOME_REPO  + '/nf/envs/macs2.yaml'
 
   input:
     tuple file(bam_file), val(experiment_name), val(antibody_name)
@@ -100,10 +100,11 @@ process merge_saf {
  * HOME_REPO - location of the repository
  */
 process chip_qc {
-  conda params.HOME_REPO + '/nf/envs/bwa.yaml'
+  // conda params.HOME_REPO + '/nf/envs/bwa.yaml'
 
   input:
     tuple val(chipfile_id), file(bam_file), file(saf_file)
+    file HOME_REPO
 
   output:
     tuple val(chipfile_id), file(cell_stats), file(sample_stats)
@@ -113,7 +114,7 @@ process chip_qc {
     sample_stats = "${chipfile_id}.chipQC_sample.txt"
 
     """
-    python "${params.HOME_REPO}/py/chipQC.py" "${bam_file}" "${saf_file}" "${cell_stats}" --sample_out "${sample_stats}"
+    python "${HOME_REPO}/py/chipQC.py" "${bam_file}" "${saf_file}" "${cell_stats}" --sample_out "${sample_stats}"
     """
 
   stub:
@@ -133,12 +134,13 @@ process chip_qc {
  * HOME_REPO - location of the repository
  */
 process merge_chip_qc {
-  conda params.HOME_REPO + '/nf/envs/skbio.yaml'
+  // conda params.HOME_REPO + '/nf/envs/skbio.yaml'
 
   input:
     file chipqc_sample  // expected that .collect() is run. 
     file chipqc_cell // expected that .collect() is run
     val output_base
+    file HOME_REPO
 
   output:
     file chipseq_merged_sample
@@ -170,7 +172,7 @@ process merge_chip_qc {
             tail -n +2 \$inf >> "${chipseq_merged_sample}"
         fi
     done < infiles
-    python "${params.HOME_REPO}/py/chipqc_plots.py" "${chipseq_merged_cell}" "${chipseq_merged_sample}" "${chipseq_plots}"
+    python "${HOME_REPO}/py/chipqc_plots.py" "${chipseq_merged_cell}" "${chipseq_merged_sample}" "${chipseq_plots}"
     """
 
   stub:

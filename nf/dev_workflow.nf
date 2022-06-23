@@ -4,51 +4,37 @@ nextflow.enable.dsl=2
  * Development workflow
  */
 
+params.py_dir = file(params.HOME_REPO + 'py')
+params.output_dir = file(params.output)
+
 // CHANGE THIS FILE TO RUN DIFFERENT SAMPLES THROUGH THE PIPELINE
 // the digest_file is a csv of the form <sequence_id>,<library_type>,<fastq1>,<fastq2>
 // and drives the run of the pipeline
 
-// general parameters
-params.RUN_NAME = 'Ishii_ET_RD'
-params.HOME_REPO = '/home/app.dev1/repos/pipelines/'
-params.py_dir = params.HOME_REPO + 'py/'
-
-// input and output
-// LIBRARY_DIGEST = file(params.HOME_REPO + '/ex/example_library_digest.csv')
-// SAMPLE_DIGEST = file(params.HOME_REPO + '/ex/zhu2020_sample_digest.csv')
-LIBRARY_DIGEST = file('libdigest.csv')
-SAMPLE_DIGEST = file('sample_digest.csv')
-params.output_dir = 'publisher'
-
-
-// parameters of R1 trimming
-params.trim_ncores = 2
-params.adapter_seq = "CTGTCTCTTATA"  // nextera
-params.trim_qual = 20
+// input sample information: highly recommanded to use command line input,i.e., --lib_digest_fname 'libdigest.csv' --sam_digest_fname 'sample_digest.csv'
+params.lib_digest = 'libdigest.csv'
+params.sam_digest = 'sample_digest.csv'
+LIBRARY_DIGEST = file(params.lib_digest)
+SAMPLE_DIGEST = file(params.sam_digest)
 
 // parameters of R2 parsing
 params.linker_file = file(params.HOME_REPO + '/config/linkers.fa')
 params.combin_barcodes = file(params.HOME_REPO + '/config/well_barcode_8bp.fa')
 params.sample_barcodes = SAMPLE_DIGEST  /* now BCs are exported from LIMS file(params.HOME_REPO +  '/config/sample_barcode_4bp.fa') */
-params.umi_len = 10
-params.r2_parse_threads = 4
 
 // parameters of genome alignment
-params.genome_reference = file('/home/share/storages/2T/genome/mouse/GRCm39.primary_assembly.genome.fa.gz')
-params.alignment_ncore = 4
-params.ramsize = 2000000000
-params.star_index = file('/home/share/storages/2T/genome/mouse/star_index/')
+params.genome_reference = file(params.GENOMEREFERENCE + params.genome_file)
+params.bwa_index = file(params.GENOMEREFERENCE + params.bwa_index_dir)
+params.star_index = file(params.GENOMEREFERENCE + params.star_index_dir)
 
 // parameters for read counting & bam annotation
-params.genome_bin_file = file('/home/share/storages/2T/genome/mouse/GRCm39_1kb.saf')
-params.genome_gtf_file = file('/home/share/storages/2T/genome/mouse/gencode.vM28.annotation.gtf')
-params.genome_gtf_collapsed_file = file('/home/share/storages/2T/genome/mouse/gencode.vM28.annotation.collapsed.gtf')
-params.genome_bed_file = file('/home/share/storages/2T/genome/mouse/gencode.vM28.annotation.bed')
-params.enhancer_saf_file = file('/home/share/storages/2T/genome/mouse/GRCm39_Encode_Enhancers.saf')
-params.promoter_saf_file = file('/home/share/storages/2T/genome/mouse/GRCm39_Encode_Promoters.saf')
-params.genome_element_db = file('/home/chartl/projects/2022-02/annotation_files_for_dna/epimap/mmSDB.saf')
-params.count_ncores = 3
-params.macs_genome_type = "mm"
+params.genome_bin_file = file(params.GENOMEREFERENCE + params.genome_bin)
+params.genome_saf_file = file(params.GENOMEREFERENCE + params.genome_saf)
+params.genome_gtf_collapsed_file = file(params.GENOMEREFERENCE + params.genome_gtf_collapsed)
+params.genome_bed_file = file(params.GENOMEREFERENCE + params.genome_bed)
+params.enhancer_saf_file = file(params.GENOMEREFERENCE + params.enhancer_saf )
+params.promoter_saf_file = file(params.GENOMEREFERENCE + params.promoter_saf)
+params.genome_element_db = file(params.GENOMEREFERENCE + params.genome_element_db_saf)
 
 // modules
 include { trim_fq_single } from params.HOME_REPO + '/nf/modules/trim'
@@ -92,7 +78,8 @@ workflow {
   /* Parsing barcodes from R2 fastq */
   // in: (sequence_id, r2_fastq)
   // out:(sequence_id, barcode_csv)
-  parsed_barcodes = parse_pairedtag_r2(read2_ch)
+  parsed_barcodes = parse_pairedtag_r2(read2_ch, params.py_dir, params.combin_barcodes, params.sample_barcodes, params.linker_file)
+//   parsed_barcodes = parse_pairedtag_r2(read2_ch)
 
   /* Trim R1 fastq */
   // in: (sequence_id, r1_fastq))
@@ -107,7 +94,7 @@ workflow {
    * ex) lib1__assay1_antibody1_1.fq.gz, lib1__assay1_antibody1_2.fq.gz, lib1__assay2_antibody1_1.fq.gz, ... */ 
   // in: (seq_id, trimmed_R1, parsed_barcode)
   // out: seq_id, fq.gz files
-  run_fastqs = split_annot_r1(trim_bc_join) // seq_id and fq files 
+  run_fastqs = split_annot_r1(trim_bc_join, params.py_dir, params.combin_barcodes, params.sample_barcodes) // seq_id and fq files 
    
    /* Channelling each fq file to (seq_id, seq_type, fq file) */
    i=0
@@ -129,8 +116,8 @@ workflow {
   /* alignment */
   // in: (seq_id, fq.gz, seq_type)
   // out: (seq_id, bamfile, seq_type, assay_id, antibody_name)
-  dna_rawbam = bwa_aligner_single(dna_fq)
-  rna_rawbam = star_aligner_single(rna_fq)
+  dna_rawbam = bwa_aligner_single(dna_fq, params.genome_reference, params.bwa_index )
+  rna_rawbam = star_aligner_single(rna_fq, params.star_index)
   
   /* rna_qc */
   //Merge rna bams by seq_id(lib_id), assay_id and antibody_name (not including cell count limit)
@@ -149,8 +136,8 @@ workflow {
   //filtering and tagging: MI -> umi, BC -> raw sbc, CR -> full barcode string, CB -> parsed BC1BC2SM1, XX -> the read number
   // in: (seq_id, bamfile, seq_type, assay_id, antibody_name)
   // out: (seq_id, tagged_bamfile, seq_type, assay_id, antibody_name)
-  dna_tagged = tag1(dna_rawbam.filter{ ! it[1].simpleName.contains('_unlinked') })
-  rna_tagged = tag2(rna_rawbam.filter{ ! it[1].simpleName.contains('_unlinked') })
+  dna_tagged = tag1(dna_rawbam.filter{ ! it[1].simpleName.contains('_unlinked') }, params.py_dir)
+  rna_tagged = tag2(rna_rawbam.filter{ ! it[1].simpleName.contains('_unlinked') }, params.py_dir)
   
   // Bin, Genome Element and Gene annotation with featurecounts: DNA(XT => BN, RE) RNA(XT => BN, GN)
   // in:  (seq_id, bam, seq_type, assay_id, antibody_name), 
@@ -159,15 +146,15 @@ workflow {
   // out: (seq_id, anno_bam, seq_type, assay_id, antibody), log file, log file
   dna_withGN = dna_annot(dna_tagged,
                          tuple(params.genome_bin_file, 'SAF', 'BN'),
-                         tuple(params.genome_element_db, 'SAF', 'RE'))
+                         tuple(params.genome_element_db, 'SAF', 'RE'), file(params.HOME_REPO))
   rna_withGN = rna_annot(rna_tagged,
                          tuple(params.genome_bin_file, 'SAF', 'BN'),
-                         tuple(params.genome_gtf_file, 'GTF', 'GN'))
+                         tuple(params.genome_saf_file, 'SAF', 'GN'), file(params.HOME_REPO))
 
   // for dna, add encode enhancer/prmoter tags
   dna_withEN = cre_annot(dna_withGN[0],
-                         tuple(params.encode_enhancer_file, 'SAF', 'EE'),
-                         tuple(params.encode_promoter_file, 'SAF', 'EP'))
+                         tuple(params.enhancer_saf_file, 'SAF', 'EE'),
+                         tuple(params.promoter_saf_file, 'SAF', 'EP'), file(params.HOME_REPO))
   
   /* read and umi count with umi_tools based on a given tag */
   // in: (seq_id, bam, seq_type, assay_id, antibody), count_tag
@@ -206,7 +193,7 @@ workflow {
   /* chip QC */
   // in:  (expname_antibody, bam, saf, 'SAF')
   // out: (chipfile_id(expname_antibody), file(cell_stats), file(sample_stats))
-  chip_qc = chip_qc(bam_peak_ch.map{ it -> tuple(it[0], it[1], it[2])})
+  chip_qc = chip_qc(bam_peak_ch.map{ it -> tuple(it[0], it[1], it[2])}, file(params.HOME_REPO))
 
   /* peak annotation */
   // in: (expname_antibody, bam, saf, 'SAF'), 'peaks'(annotation_name)
@@ -252,8 +239,8 @@ workflow {
   // merging
   // in: (a list of count files, file_header)
   // out: merged_count files both in h5ad and txt.gz formats
-  dna_read_merged_count = dna_merge_read(read_input)
-  dna_umi_merged_count = dna_merge_umi(umi_input)
+  dna_read_merged_count = dna_merge_read(read_input, SAMPLE_DIGEST, file(params.HOME_REPO))
+  dna_umi_merged_count = dna_merge_umi(umi_input, SAMPLE_DIGEST, file(params.HOME_REPO))
   
   
   /* merge RNA read and umi counts per cell per gene  which means the counts are based on "GN" tag*/
@@ -265,8 +252,8 @@ workflow {
   // merging
   // in: (a list of count files, file_header)
   // out: merged count files both in h5ad and txt.gz formats
-  rna_read_merged_count = rna_merge_read(r_read_input)
-  rna_umi_merged_count = rna_merge_umi(r_umi_input)
+  rna_read_merged_count = rna_merge_read(r_read_input, SAMPLE_DIGEST, file(params.HOME_REPO))
+  rna_umi_merged_count = rna_merge_umi(r_umi_input, SAMPLE_DIGEST, file(params.HOME_REPO))
 
   /* merge RNA read and umi counts per cell, which means the counts are based on "BN" tag */
   // channelling
@@ -277,8 +264,8 @@ workflow {
   // merging
   // in: (a list of count files, file_header)
   // out: merged count files both in h5ad and txt.gz formats
-  rna_bin_read_merged_count = rna_merge_bin_read(r_bin_read_input)
-  rna_bin_umi_merged_count = rna_merge_bin_umi(r_bin_umi_input)
+  rna_bin_read_merged_count = rna_merge_bin_read(r_bin_read_input, SAMPLE_DIGEST, file(params.HOME_REPO))
+  rna_bin_umi_merged_count = rna_merge_bin_umi(r_bin_umi_input, SAMPLE_DIGEST, file(params.HOME_REPO))
 
   
   /* merge Peak read and umi counts, which means the counts are based on "XT(peak)" tag */
@@ -290,8 +277,8 @@ workflow {
   // merging
   // in: (a list of count files, file_header)
   // out: merged count files both in h5ad and txt.gz formats
-  peak_read_merged_count = peak_merge_read(p_read_input)
-  peak_umi_merged_count = peak_merge_umi(p_umi_input)
+  peak_read_merged_count = peak_merge_read(p_read_input, SAMPLE_DIGEST, file(params.HOME_REPO))
+  peak_umi_merged_count = peak_merge_umi(p_umi_input, SAMPLE_DIGEST, file(params.HOME_REPO))
   
   // publish results
   publishdnabam(annodna_mg[0].map{ it -> it[0]})

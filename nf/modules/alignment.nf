@@ -16,10 +16,11 @@ nextflow.enable.dsl=2
  *   + ramsize: size of RAM
  */
 process star_aligner_single {
-  conda params.HOME_REPO + '/nf/envs/star.yaml'
+  // conda params.HOME_REPO + '/nf/envs/star.yaml'
   
     input:
       tuple val(sequence_id), file(fastq_trimmed1), val(seqtype)
+      file star_index
       
 
     output:
@@ -40,7 +41,7 @@ process star_aligner_single {
         --readFilesCommand zcat \\
         --outSAMunmapped Within \\
         --limitBAMsortRAM $params.ramsize \\
-        --genomeDir $params.star_index \\
+        --genomeDir "${star_index}" \\
         --outFileNamePrefix "${prefix}"
 
     """
@@ -70,10 +71,12 @@ process star_aligner_single {
  */
 
 process bwa_aligner_single {
-  conda params.HOME_REPO + '/nf/envs/bwa.yaml'
+  // conda params.HOME_REPO + '/nf/envs/bwa.yaml'
 
   input:
     tuple val(sequence_id), file(fq_file), val(seqtype)
+    file(genome_reference)
+    file(bwaindex)
 
   output:
     tuple val(sequence_id), file(aln_bam), val(seqtype), val(assay), val(antibody)
@@ -85,8 +88,10 @@ process bwa_aligner_single {
     seqid = fq_pfx.split("__")[0]
     assay = fq_pfx.split("__")[1]
     antibody = fq_pfx.split("__")[2]
+    //"${bwa_index}/${genome_reference}"
+    
     """
-    bwa mem -t "${params.alignment_ncore}" "${params.genome_reference}" "${fq_file}" | samtools view -hb > "${aln_bam}"
+    bwa mem -t "${params.alignment_ncore}" "${bwaindex}/${genome_reference}" "${fq_file}" | samtools view -hb > "${aln_bam}" 
     d=\$(samtools view "${aln_bam}" | head -n 10 | wc -l)
     if [[ "\${d}" -lt 2 ]]; then
       exit 255
@@ -115,7 +120,7 @@ process bwa_aligner_single {
  */
 process merge_bams {
   
-  conda params.HOME_REPO + '/nf/envs/bwa.yaml'
+  // conda params.HOME_REPO + '/nf/envs/bwa.yaml'
 
   input:
     tuple file(bam_file), val(base_name1), val(base_name2)
@@ -146,7 +151,7 @@ process merge_bams {
  * This process extracts basic alignment QC metrics
  */
 process alignment_qc {
-  conda params.HOME_REPO + '/nf/envs/bwa.yaml'
+  // conda params.HOME_REPO + '/nf/envs/bwa.yaml'
 
   input:
     tuple val(sequence_id), file(bam_file), val(seqtype), val(assay), val(antibody)

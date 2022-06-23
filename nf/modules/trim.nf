@@ -14,7 +14,7 @@ nextflow.enable.dsl=2
  *   + trim_ncores: the number of cores to use for trimming
  */
 process trim_fq_single {
-  conda params.HOME_REPO + '/nf/envs/cutadapt.yaml'
+  // conda params.HOME_REPO + '/nf/envs/cutadapt.yaml'
   input:
     tuple val(sequence_id), file(fastq_file)
 
