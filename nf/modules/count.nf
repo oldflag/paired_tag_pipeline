@@ -125,6 +125,41 @@ process umitools_count {
       """
 }
 
+/*
+ * This process defines a simple counting procedure for use
+ * on e.g., bulk data
+ */
+process simple_feature_count {
+  conda params.HOME_REPO + '/nf/envs/featurecounts.yaml'
+  input:
+    tuple val(sequence_id), file(bam_file)
+    tuple file(annotation_file), val(annotation_type)
+
+  output:
+    tuple val(sequence_id), file(count_file)
+    file fc_log
+
+  script:
+    count_file = "${sequence_id}_count.txt"
+    fc_log = "${sequence_id}_count.log"
+    """
+    mkdir -p fc_out
+    featureCounts -F "${annotation_type}" \
+      -O -Q 30 \
+      -T "${params.count_ncores}" \
+      --verbose --Rpath fc_out \
+      -a "${annotation_file}" -o "${count_file}" \
+      "${bam_file}" 2>&1 > "${fc_log}"
+
+      """
+
+    stub:
+      count_file = "${sequence_id}_count.txt"
+      fc_log = "${sequence_id}_count.log"
+      """
+      touch "${count_file}" "${fc_log}"
+      """
+}
 
 process annotate_multiple_features {
   conda params.HOME_REPO + '/nf/envs/featurecounts.yaml'
@@ -196,6 +231,8 @@ process annotate_multiple_features {
     merged_bam = bamname - '.bam' + '_multiAnnot.bam'
 
     """
+    touch "${count_file1}"
+    touch "${count_file2}"
     touch "${merged_bam}"
     touch "${fc_log}"
     touch "${merge_log}"

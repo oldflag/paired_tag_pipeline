@@ -10,6 +10,7 @@ def get_args():
     parser = ArgumentParser()
     parser.add_argument('barcode_csv', help='The barcode csv.gz file')
     parser.add_argument('output_pdf', help='The output qc pdf')
+    parser.add_argument('--plate_layout', help='The plate layout csv file', default='/home/chartl/repos/pipelines/config/plate_layout.csv')
 
     return parser.parse_args()
 
@@ -38,6 +39,32 @@ def main(args):
        'sample_cell': k[0] + ':' + k[1],
        'reads': v} for k, v in counts.items()])
 
+    # plate heatmaps
+    plate_table = pd.read_csv(args.plate_layout)
+    barcode2info = {(row.barcode, row.split): (row.plate, row.plate_row, row.plate_col) for ix_, row in plate_table.iterrows()}
+
+    def get_info(bc_id, split, what='plate'):
+        if bc_id == '*':
+            return 999
+        if (bc_id, split) in barcode2info:
+            plate, row, col = barcode2info[(bc_id, split)]
+        else:
+            return -1
+        if what == 'plate':
+            return int(plate[1:])
+        elif what == 'row':
+            return 1 + row
+        else:
+            return 1 + col
+    
+    records.loc[:, 'well1_plate'] = records.cell.map(lambda x: get_info(x.split('.')[0], 1, what='plate'))
+    records.loc[:, 'well2_plate'] = records.cell.map(lambda x: get_info(x.split('.')[1] if '.' in x else '*', 2, what='plate'))
+    records.loc[:, 'well1_row'] = records.cell.map(lambda x: get_info(x.split('.')[0], 1, what='row'))
+    records.loc[:, 'well2_row'] = records.cell.map(lambda x: get_info(x.split('.')[1] if '.' in x else '*', 2, what='row'))
+    records.loc[:, 'well1_col'] = records.cell.map(lambda x: get_info(x.split('.')[0], 1, what='col'))
+    records.loc[:, 'well2_col'] = records.cell.map(lambda x: get_info(x.split('.')[1] if '.' in x else '*', 2, what='col'))
+    records.loc[:, 'assignment_valid'] = ((records.well1_plate != -1) & (records.well2_plate != -1)).map(lambda x: 'valid' if x else 'invalid')
+
     r_unassign = records[records.sample_cell.map(lambda x: '*' in x)].reads.sum() / records.reads.sum()
     str_A = 'assigned (%.1f%%)' % (100 * (1-r_unassign)) 
     str_U = 'unassigned (%.1f%%)' % (100 * r_unassign)
@@ -47,6 +74,15 @@ def main(args):
     plt.bar(acounts.assignment, acounts.reads)
     plt.ticklabel_format(axis='y', style='plain')
 
+    plt.tight_layout()
+    pdf.savefig()
+    plt.figure()
+
+    n_valid = records[(records.well1_plate != 999) & (records.assignment_valid == 'valid')].shape[0]
+    n_invalid = records[(records.well1_plate != 999) & (records.assignment_valid == 'invalid')].shape[0]
+
+    valid_counts = records[records.sample_cell.map(lambda x: '*' not in x)].assignment_valid.value_counts()
+    plt.bar(['valid barcodes', 'invalid barcodes'], [n_valid, n_invalid])
     plt.tight_layout()
     pdf.savefig()
     plt.figure()
@@ -142,52 +178,38 @@ def main(args):
     pdf.savefig()
 
 
-    # plate heatmaps
-    def cell2plate(bc_id):
-        x = bc_id - 1
-        x_rc = (x % 96)
-        plate_no = int((x - x_rc)/96)
-        column = x_rc % 12
-        row = int((x_rc - column)/8)
-        return 1 + plate_no, 1 + row, 1 + column
-
-    records.loc[:, 'well1'] = records.cell.map(lambda x: int(x.split('BC')[1].strip('.')) if x != '*' else 999)
-    records.loc[:, 'well2'] = records.cell.map(lambda x: int(x.split('BC')[2]) if x != '*' else 999)
-
-    well1_info = np.array([cell2plate(d) for d in records.well1])
-    well2_info = np.array([cell2plate(d) for d in records.well2])
-
-    records.loc[:, 'well1_plate'] = well1_info[:,0]
-    records.loc[:, 'well1_row'] = well1_info[:,1]
-    records.loc[:, 'well1_col'] = well1_info[:,2]
-
-    records.loc[:, 'well2_plate'] = well2_info[:,0]
-    records.loc[:, 'well2_row'] = well2_info[:,1]
-    records.loc[:, 'well2_col'] = well2_info[:,2]
 
     dat = records[records.cell != '*']
+    dat = dat[dat.assignment_valid == 'valid']
 
-    plate_list = dat.well1_plate.unique()
+    plate_list = [1, 2, 3, 4]
+    print(dat.well1_plate.value_counts())
+    print(dat.well2_plate.value_counts())
+    # get the maximum reads in a r/c for scale
+    reads_max_w1 = dat.groupby(['well1_plate', 'well1_row', 'well1_col'])['reads'].sum().reset_index().reads.max()
+    reads_max_w2 = dat.groupby(['well1_plate', 'well1_row', 'well1_col'])['reads'].sum().reset_index().reads.max()
 
     for plate in plate_list:
-        hm_dat = dat[dat.well1_plate == plate].groupby(['well1_row', 'well1_col'])['reads'].sum().reset_index()
+        hm_dat = dat[(dat.well1_plate == plate)].groupby(['well1_row', 'well1_col'])['reads'].sum().reset_index()
         hm_dat = hm_dat.pivot(index='well1_row', columns='well1_col', values='reads').fillna(0)
         plt.figure(figsize=(12,12))
         prop = 100 * hm_dat/hm_dat.values.sum()
-        sbn.heatmap(hm_dat, annot=prop)
+        sbn.heatmap(hm_dat, annot=prop, vmin=0, vmax=reads_max_w1)
         title('Split 1, Plate %d, Total Reads' % plate)
         plt.tight_layout()
         pdf.savefig()
        
-        hm_dat = dat[dat.well2_plate == plate].groupby(['well2_row', 'well2_col'])['reads'].sum().reset_index()
+        hm_dat = dat[(dat.well2_plate == plate)].groupby(['well2_row', 'well2_col'])['reads'].sum().reset_index()
         hm_dat = hm_dat.pivot(index='well2_row', columns='well2_col', values='reads').fillna(0)
         plt.figure(figsize=(12,12))
         prop = 100 * hm_dat/hm_dat.values.sum()
-        sbn.heatmap(hm_dat, annot=prop)
+        sbn.heatmap(hm_dat, annot=prop, vmin=0, vmax=reads_max_w2)
         title('Split 2, Plate %d, Total Reads' % plate)
         plt.tight_layout()
         pdf.savefig()
 
+    dat.loc[:, 'well1'] = 96 * (dat.well1_plate - 1) + 12 * (dat.well1_row - 1) + (dat.well1_col - 1) + 1
+    dat.loc[:, 'well2'] = 96 * (dat.well2_plate - 1) + 12 * (dat.well2_row - 1) + (dat.well2_col - 1) + 1
     # now the big-arse heatmaps
     hm_dat = dat.groupby(['well1', 'well2'])['reads'].sum().reset_index()
     hm_dat = hm_dat.pivot(index='well1', columns='well2', values='reads').fillna(0)
