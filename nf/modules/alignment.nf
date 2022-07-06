@@ -36,14 +36,13 @@ process star_aligner_single {
     """
     STAR --readFilesIn $input_fq1 \\
         --runThreadN $params.alignment_ncore \\
-        --twopassMode Basic \\
         --outSAMtype BAM SortedByCoordinate \\
         --readFilesCommand zcat \\
         --outSAMunmapped Within \\
         --limitBAMsortRAM $params.ramsize \\
         --genomeDir "${star_index}" \\
-        --outFileNamePrefix "${prefix}"
-
+        --outFileNamePrefix "${prefix}" \\
+        --genomeLoad LoadAndKeep
     """
 
   stub:
