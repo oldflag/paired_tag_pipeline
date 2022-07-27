@@ -52,6 +52,7 @@ def get_args():
     parser.add_argument('output', help='The output .csv linking read name to disambiguated barcode')
     parser.add_argument('--threads', help='The number of threads to use', default=1, type=int)
     parser.add_argument('--umi_size', help='The size of the UMI in bp', default=10, type=int)
+    parser.add_argument('--library_id', help='The library id to use (otherwise infer from fastq)', default=None, type=str)
 
     return parser.parse_args()
 
@@ -276,12 +277,13 @@ def basename(fn):
     return fn.split('/')[-1]
 
 
-def get_sample_seqs(fasta_or_digest, input_fastq):
+def get_sample_seqs(fasta_or_digest, input_fastq, library_id):
     if fasta_or_digest[-4:] == '.csv':
         records = [r for r in DictReader(open(fasta_or_digest))]
-        print(records)
-        records = [r for r in records if basename(r['fastq2']) == basename(input_fastq)]
-        print(records)
+        if library_id:
+            records = [r for r in records if basename(r['fastq2']) == basename(input_fastq) and r['library_id'] == library_id]
+        else:
+            records = [r for r in records if basename(r['fastq2']) == basename(input_fastq)]
         return [fasta_record(r['assay_id'], r['barcode']) for r in records] 
     else:
         return list(read_fasta(fasta_or_digest))
@@ -290,7 +292,7 @@ def get_sample_seqs(fasta_or_digest, input_fastq):
 def main(args):
     linker_seqs = list(read_fasta(args.linkers))
     combin_seqs = list(read_fasta(args.well_bc))
-    sample_seqs = get_sample_seqs(args.sample_bc, args.R2_fastq)
+    sample_seqs = get_sample_seqs(args.sample_bc, args.R2_fastq, args.library_id)
     print(sample_seqs)
 
     check_args(args, linker_seqs, sample_seqs, combin_seqs)

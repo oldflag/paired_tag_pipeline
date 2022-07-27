@@ -9,4 +9,6 @@ dependencies:
   - scanpy
   - pandas
   - numpy
+  - leidenalg
+  - harmonypy
 prefix: /home/app.dev1/anaconda3/envs/scanalysis

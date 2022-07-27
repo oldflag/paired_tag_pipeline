@@ -21,7 +21,7 @@ process parse_pairedtag_r2 {
   conda params.HOME_REPO + '/nf/envs/skbio.yaml'
 
   input:
-    tuple val(sequence_id), file(r2_fastq)
+    tuple val(sequence_id), file(r2_fastq), val(library_id)
 
   output:
     tuple val(sequence_id), file(barcode_csv)
@@ -30,7 +30,7 @@ process parse_pairedtag_r2 {
     barcode_csv = "${sequence_id}.barcodes.csv.gz"
 
     """
-    python "${params.py_dir}"/parse_R2.py --threads "${params.r2_parse_threads}" --umi_size "${params.umi_len}" "${r2_fastq}" "${params.combin_barcodes}" "${params.sample_barcodes}" "${params.linker_file}" "${barcode_csv}"
+    python "${params.py_dir}"/parse_R2.py --library_id "${library_id}" --threads "${params.r2_parse_threads}" --umi_size "${params.umi_len}" "${r2_fastq}" "${params.combin_barcodes}" "${params.sample_barcodes}" "${params.linker_file}" "${barcode_csv}"
     """
 
   stub:
