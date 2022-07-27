@@ -334,15 +334,50 @@ process h5ad_qc {
 
   output:
     file out_pdf
+    file out_rna
+    file out_dna
 
   script:
     out_pdf = "${params.RUN_NAME}_h5adqc.pdf"
+    out_rna = (rna_umi.toString() - '.h5ad' + '.analysis.h5ad')
+    out_dna = (dna_umi.toString() - '.h5ad' + '.analysis.h5ad')
     """
     python "${params.HOME_REPO}/py/h5ad_qc.py" "${rna_reads}" "${rna_umi}" "${dna_reads}" "${dna_umi}" "${out_pdf}"
     """
 
   stub:
     out_pdf = "${params.RUN_NAME}_h5adqc.pdf"
+    out_rna = (rna_umi.toString() - '.h5ad' + '.analysis.h5ad')
+    out_dna = (dna_umi.toString() - '.h5ad' + '.analysis.h5ad')
+    """
+    touch $out_pdf $out_rna $out_dna
+    """
+}
+
+
+/*
+ * This process calls a python script which performs cell selection
+ * and clustering on RNA and DNA components, and produces a
+ * QC pdf file
+ */
+process cluster_qc {
+  conda params.HOME_REPO + '/nf/envs/scanalysis.yaml'
+
+  input:
+    file rna_umi
+    file dna_umi
+
+  output:
+    file out_pdf
+
+  script:
+    out_pdf = "${params.RUN_NAME}_cluster_qc.pdf"
+    """
+    python "${params.HOME_REPO}/py/cluster_qc.py" "${dna_umi}" "${rna_umi}" "${out_pdf}"
+    """
+
+  stub:
+    out_pdf = "${params.RUN_NAME}_cluster_qc.pdf"
     """
     touch $out_pdf
     """
