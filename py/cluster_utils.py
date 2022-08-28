@@ -10,6 +10,13 @@ from matplotlib import pyplot as plt
 import seaborn as sbn
 import warnings
 
+HARMONY_ARGS = {
+  'RNA': dict(),
+  'DNA': {
+    'nclust': 50
+  }
+}
+
 PDF = None
 
 MITO_GENES = ["ENSG00000210049", "ENSG00000211459", "ENSG00000210077", "ENSG00000210082", "ENSG00000209082",
@@ -80,6 +87,51 @@ def lower_tri_sub(k, ix):
     return tril_ix[0][ix], tril_ix[1][ix]
 
 
+def blockwise_normalize_jaccard(Jm, Em, libs, nadj=500, winsor=99.0):
+    """
+    Normalize a Jaccard matrix blockwise according to the libraries
+    of the individual cells.
+
+    Parameters
+    ----------
+    Jm : The binary Jaccard matrix (unnormalized)
+    Em : The expected overlap matrix (based on coverage)
+    libs : The library index (array of library ids)
+    winsor : The winsorization level to apply to the normalized Jaccard matrix
+
+    Returns
+    -------
+    A normalized Jaccard matrix
+    """
+    lib_uq = list(set(libs))
+    nlib = len(lib_uq)
+    for i in range(nlib):
+        idx = np.where(libs == lib_uq[i])[0]
+        k_i = idx.shape[0]
+        for j in range(i, nlib):
+            jdx = np.where(libs == lib_uq[j])[0]
+            k_j = jdx.shape[0]
+            print('Jaccard: (%s x %s) -> (%d x %d)' % (lib_uq[i], lib_uq[j], k_i, k_j))
+            if k_i * k_j > nadj:
+                ix = np.random.choice(k_i*k_j, nadj)
+            else:
+                ix = np.arange(k_i*k_j)
+            ex = Em[np.ix_(idx, jdx)].ravel()[ix]
+            jx = Jm[np.ix_(idx, jdx)].ravel()[ix]
+            poly = np.polyfit(ex, jx, deg=2)
+            Em[np.ix_(idx, jdx)] = np.polyval(poly, Em[np.ix_(idx, jdx)].ravel()).reshape((k_i, k_j))
+            Em[np.ix_(jdx, idx)] = np.polyval(poly, Em[np.ix_(jdx, idx)].ravel()).reshape((k_j, k_i))
+    Em[np.diag_indices_from(Em)] = 1.
+    print(Jm[:5,:5])
+    J = Jm/Em
+    print(J[:5,:5])
+    q = np.percentile(J[np.tril_indices(J.shape[0], -1)], winsor)
+    J[J>q] = q
+    J[np.diag_indices_from(J)] = 1.
+
+    return J
+
+
 def normalize_jaccard(Jm, Em, nadj=500, winsor=99.0):
     """
     Normalize a Jaccard matrix given the expected overlap matrix
@@ -137,12 +189,15 @@ def jaccard_diagnostics(dn_adata, n_approx=500, winsor=99.0, title=''):
      + Empaneled pairwise jaccard boxplot
     """
     J, E, C = binary_jaccard(dn_adata)
-    Jn = normalize_jaccard(J, E, n_approx, winsor)
+    Jn = blockwise_normalize_jaccard(J, E, dn_adata.obs.library_id.astype(str), n_approx, winsor)
+    #Jn = normalize_jaccard(J, E, n_approx, winsor)
     D = Jn.sum(axis=1)
     assay_diagn = pd.DataFrame.from_dict({
         'assay_id': dn_adata.obs.assay_id.values,
         'bin_coverage': C,
-        'jaccard_intensity': D
+        'jaccard_intensity': D,
+        'mean_jaccard': (J.sum(axis=1)-1)/(2*(J.shape[0]-1)),
+        'library_id': dn_adata.obs.library_id.values
     })
     k = Jn.shape[0]
     ix = np.random.choice(int(k*(k-1)/2), 1000, replace=False)
@@ -154,7 +209,8 @@ def jaccard_diagnostics(dn_adata, n_approx=500, winsor=99.0, title=''):
     sbn.boxplot(data=assay_diagn, x='assay_id', y='bin_coverage', ax=axs[0, 1])
     axs[0, 1].set_xticklabels(axs[0, 1].get_xticklabels(), rotation=90, fontsize=7)
     axs[0, 1].set_rasterized(True)
-    axs[0, 2].scatter(C, (J.sum(axis=1)-1) / (2*(J.shape[0] - 1)), s=1)
+    sbn.scatterplot(data=assay_diagn, x='bin_coverage', y='mean_jaccard', hue='library_id', ax=axs[0, 2], s=1)
+    #axs[0, 2].scatter(C, (J.sum(axis=1)-1) / (2*(J.shape[0] - 1)), s=1)
     axs[0, 2].set_xlabel('Cell mean coverage / bin')
     axs[0, 2].set_ylabel('Cell average Jaccard')
     axs[0, 2].set_rasterized(True)
@@ -269,7 +325,7 @@ def do_dna_cluster_(dat_dna_analysis, npc, drop_first=True, resolution=0.5,
 
     if correct is not None:
         scp.external.pp.harmony_integrate(dat_dna_analysis, key=correct, basis='X_pca', adjusted_basis='X_pca_harmony',
-                                          max_iter_harmony=150)
+                                          max_iter_harmony=150, **HARMONY_ARGS['DNA'])
         rep_use='X_pca_harmony'
     else:
         rep_use='X_pca'
@@ -315,6 +371,23 @@ def do_dna_cluster_(dat_dna_analysis, npc, drop_first=True, resolution=0.5,
         plt.savefig(PDF, format='pdf', dpi=250)
         plt.close()
 
+    fig, axs = plt.subplots(2, 3, constrained_layout=True, figsize=(6*2.5, 4*2.5))
+    axs[0, 0].scatter(np.arange(s.shape[0]), s, color='black', s=2)
+    axs[0, 0].set_xlabel('Eigenvalue #')
+    axs[0, 0].set_ylabel('Eigenvalue')
+    sbn.scatterplot(data=pca_data, x='PC1', y='PC2', hue=color_key, legend=False, ax=axs[0, 1], s=10)
+    sbn.scatterplot(data=pca_data, x='PC3', y='PC4', hue=color_key, legend=False, ax=axs[0, 2], s=10)
+    sbn.scatterplot(data=pca_data, x='UMAP1', y='UMAP2', hue='leiden', legend=False, ax=axs[1, 0], s=10)
+    sbn.scatterplot(data=pca_data, x='UMAP1', y='UMAP2', hue=color_key, legend=False, ax=axs[1, 1], s=10)
+    sbn.scatterplot(data=pca_data, x='TSNE1', y='TSNE2', hue='leiden', legend=False, ax=axs[1, 2], s=10)
+    
+    plt.gca().set_rasterized(True)
+    fig.suptitle(plot_title)
+    if PDF:
+        plt.savefig(PDF, format='pdf', dpi=250)
+        plt.close()
+    
+
     return dat_dna_analysis
 
 
@@ -334,13 +407,21 @@ def cluster_antibody_dna(dat_dna, antibody, n_pcs=15, drop_first=1, min_bins=300
 
     """
     dat_dna = dat_dna[dat_dna.obs.antibody_name == antibody,:].copy()
+    print('Antibody %s: %d' % (antibody, dat_dna.shape[0]))
     if dat_dna.shape[0] < min_cells:
         dat_dna.obs.loc[:,'leiden'] = np.nan
         return dat_dna
     dat_dna.raw = dat_dna
+    print('Filtering on min_bins >= %d, umi >= %d, umi <= %d' % (min_bins, min_umi, max_umi))
+    print('Current ranges are: bins (%d-%d), umi (%d-%d)' % (
+              dat_dna.obs.feature_count.min(),
+              dat_dna.obs.feature_count.max(),
+              dat_dna.obs.molecule_count.min(),
+              dat_dna.obs.molecule_count.max()))
     dat_dna = dat_dna[(dat_dna.obs.feature_count >= min_bins) &
                       (dat_dna.obs.molecule_count >= min_umi) &
                       (dat_dna.obs.molecule_count <= max_umi)]
+    print('Antibody %s: %d post filter' % (antibody, dat_dna.shape[0]))
 
     fig, axs = plt.subplots(2, 3, constrained_layout=True, figsize=(6*2.5, 4*2.5))
 
@@ -349,7 +430,9 @@ def cluster_antibody_dna(dat_dna, antibody, n_pcs=15, drop_first=1, min_bins=300
     dat_dna.var.loc[:, 'percentile'] = np.argsort(np.argsort(dat_dna.var.counts)) / dat_dna.var.shape[0]
     # autosome + X
     dat_dna.var.loc[:, 'contig'] = dat_dna.var.feature_name.map(lambda x: x.split('_')[0])
+    print({x for x in dat_dna.var.contig})
     want_contigs = {'chr%d' % s for s in range(1, 23)} | {'chrX'}
+    want_contigs = want_contigs | {'i@%s' % u for u in want_contigs}  # previous bin maps used i@chr as names
     dat_dna.var.loc[:, 'analysis'] = dat_dna.var.contig.isin(want_contigs).map(lambda s: 'retain' if s else 'remove')
     axs[0, 0].scatter(dat_dna.var[dat_dna.var.analysis == 'retain'].percentile.values,
                       dat_dna.var[dat_dna.var.analysis == 'retain'].counts.values - 0.25,  # slight offset
@@ -366,6 +449,7 @@ def cluster_antibody_dna(dat_dna, antibody, n_pcs=15, drop_first=1, min_bins=300
                                   (dat_dna.var.percentile <= max_bin_pct) &
                                   (dat_dna.var.counts >= min_cells_bin)]
 
+    print('Dropped %d bins' % (dat_dna.shape[1] - dat_dna_analysis.shape[1]))
 
     axs[0, 1].scatter(dat_dna_analysis.var[dat_dna_analysis.var.analysis == 'retain'].percentile.values,
                       dat_dna_analysis.var[dat_dna_analysis.var.analysis == 'retain'].counts.values,
@@ -411,7 +495,7 @@ def cluster_antibody_dna(dat_dna, antibody, n_pcs=15, drop_first=1, min_bins=300
         plt.savefig(PDF, format='pdf', dpi=250)
         plt.close()
 
-    dat_dna.obsp['jaccard'] = jaccard_diagnostics(dat_dna, n_approx=min_cells*4, title=antibody)
+    dat_dna.obsp['jaccard'] = jaccard_diagnostics(dat_dna, n_approx=1000, title=antibody)
     dat_dna = do_dna_cluster_(dat_dna, n_pcs, drop_first, plot_title=antibody,
                               n_neighbors=n_neighbors, correct=harmonize,
                               resolution=resolution)
@@ -435,43 +519,55 @@ def find_modes1d(xdata, res=5000, bw=0.225):
     return x[np.where(p2n)], x[np.where(n2p)]
 
 
-def select_cells_assay_(anndata, assay_id, fallback_dna_umi, fallback_rna_umi, min_th=0.75, max_th=1.25):
+def select_cells_assay_(anndata, assay_id, fallback_dna_umi, fallback_rna_umi, fallback_only=False, min_th=0.75, max_th=1.25):
     """
     Automatically select cells based on the dna/rna read distribution by searching for
     modes in a (typically) bimodal distribution.
     """
     assay_ix = np.where(anndata.obs.assay_id == assay_id)[0]
-    r = np.sqrt(np.log10(anndata.obs.rna_reads.values[assay_ix]) ** 2 + \
-                np.log10(anndata.obs.dna_reads.values[assay_ix]) ** 2)
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore')
-        theta = np.arctan(np.log10(anndata.obs.dna_reads.values[assay_ix]) / \
-                          np.log10(anndata.obs.rna_reads.values[assay_ix])) / (np.pi / 4)
-
+    if anndata.obs.antibody_name.values[assay_ix[0]] == 'NA':
+        r = np.sqrt(np.log10(anndata.obs.rna_reads.values[assay_ix]) ** 2)
+        theta = (0 * r) + 1
+    else:
+        r = np.sqrt(np.log10(anndata.obs.rna_reads.values[assay_ix]) ** 2 + \
+                    np.log10(anndata.obs.dna_reads.values[assay_ix]) ** 2)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            theta = np.arctan(np.log10(anndata.obs.dna_reads.values[assay_ix]) / \
+                              np.log10(anndata.obs.rna_reads.values[assay_ix])) / (np.pi / 4)
+    
     ix1 = np.where((theta >= min_th) & (theta <= max_th))[0]
     peaks, troughs = find_modes1d(r[ix1])
-    lower, upper = peaks[(peaks > 1) & (peaks < 3)].mean(), peaks[(peaks > 4) & (peaks < 7)].mean()
+    pt = np.array([1, 4, 7]) * np.percentile(r, 99.95)/7
+    lower, upper = peaks[(peaks > pt[0]) & (peaks < pt[1])].mean(), peaks[(peaks > pt[1]) & (peaks < pt[2])].mean()
     keep_vec = anndata.obs.loc[:, 'keep_cell_'].values
-    if np.isnan(upper):
+    if fallback_only or np.isnan(upper):
         print('Upper peak is too low for %s; falling back to UMI' % assay_id)
         dna_u, rna_u = anndata.obs.dna_umis.values[assay_ix], anndata.obs.rna_umis.values[assay_ix]
         ix2 = np.where((dna_u >= fallback_dna_umi) & (rna_u >= fallback_rna_umi))
         keep_idx = assay_ix[ix2]
     else:
-        cut = troughs[(troughs > lower) & (troughs < upper)][-1]
-        if np.isnan(cut) or np.isnan(lower) or np.isnan(upper):
-            print('Cell distribution monotonic or unimodal for %s; falling back to UMI' % assay_id)
-            keep_vec = anndata.obs.loc[:, 'keep_cell_'].values
+        try:
+            cut = troughs[(troughs > lower) & (troughs < upper)][-1]
+            if np.isnan(cut) or np.isnan(lower) or np.isnan(upper):
+                print('Cell distribution monotonic or unimodal for %s; falling back to UMI' % assay_id)
+                keep_vec = anndata.obs.loc[:, 'keep_cell_'].values
+                dna_u, rna_u = anndata.obs.dna_umis.values[assay_ix], anndata.obs.rna_umis.values[assay_ix]
+                ix2 = np.where((dna_u >= fallback_dna_umi) & (rna_u >= fallback_rna_umi))
+                keep_idx = assay_ix[ix2]
+            else:
+                cut2 = troughs[troughs > upper]
+                if cut2.shape[0] > 0:
+                    ix2 = np.where((r[ix1] > cut) & (r[ix1] < cut2[-1]))
+                else:
+                    ix2 = np.where(r[ix1] > cut)
+                keep_idx = assay_ix[ix1][ix2]
+        except IndexError:
+            print('Upper peak is too low for %s; falling back to UMI' % assay_id)
             dna_u, rna_u = anndata.obs.dna_umis.values[assay_ix], anndata.obs.rna_umis.values[assay_ix]
             ix2 = np.where((dna_u >= fallback_dna_umi) & (rna_u >= fallback_rna_umi))
             keep_idx = assay_ix[ix2]
-        else:
-            cut2 = troughs[troughs > upper]
-            if cut2.shape[0] > 0:
-                ix2 = np.where((r[ix1] > cut) & (r[ix1] < cut2[-1]))
-            else:
-                ix2 = np.where(r[ix1] > cut)
-            keep_idx = assay_ix[ix1][ix2]
+
 
     keep_vec[keep_idx] = True
     anndata.obs.loc[:, 'keep_cell_'] = keep_vec
@@ -479,7 +575,7 @@ def select_cells_assay_(anndata, assay_id, fallback_dna_umi, fallback_rna_umi, m
     return anndata
 
 
-def select_cells(anndata, fallback_dna_umi=350, fallback_rna_umi=350):
+def select_cells(anndata, fallback_dna_umi=350, fallback_rna_umi=350, fallback_only=False):
     """
     Automatically select cells based on the dna/rna read distribution by searching for
     modes in a (typically) bimodal distribution.
@@ -497,21 +593,25 @@ def select_cells(anndata, fallback_dna_umi=350, fallback_rna_umi=350):
     print('Selecting cells...')
     anndata.obs.loc[:, 'keep_cell_'] = False  # set all to false (to generate the column)
     for assay_id in anndata.obs.assay_id.unique():
-        anndata = select_cells_assay_(anndata, assay_id, fallback_dna_umi, fallback_rna_umi)
+        anndata = select_cells_assay_(anndata, assay_id, fallback_dna_umi, fallback_rna_umi, fallback_only)
 
     assay_ids = anndata.obs.assay_id.unique()
     n_ids = len(assay_ids)
     rr, cc = int(np.sqrt(n_ids)) + 1, int(np.sqrt(n_ids)) + 1
+    print((n_ids, rr, cc))
     fig, axs = plt.subplots(rr, cc, figsize=(6 * 3, 6 * 3))
     for i, aid in enumerate(assay_ids):
         r = min(int(i / cc), cc) - 1
         c = i % cc
+        print((i,r,c))
         dsub = anndata[anndata.obs.assay_id == aid]
         axs[r, c].scatter(dsub.obs.rna_reads, dsub.obs.dna_reads, s=1)
         dsub2 = dsub[dsub.obs.keep_cell_]
         axs[r, c].scatter(dsub2.obs.rna_reads, dsub2.obs.dna_reads, s=1)
         axs[r, c].set_xscale('log')
         axs[r, c].set_yscale('log')
+        axs[r, c].set_xlabel('RNA reads')
+        axs[r, c].set_ylabel('DNA reads')
         axs[r, c].set_title(aid, fontsize=8)
         axs[r, c].set_rasterized(True)
 
@@ -556,13 +656,20 @@ def cluster_pairedtag_dna(dat_dna, lim_features=250, lim_molecule=320, max_molec
     """
     antibs = dat_dna.obs.antibody_name.unique()
     if len(antibs) == 1:
-        return do_dna_cluster_ab(dat_dna, antibs[0], n_pcs, drop_first,
+        return cluster_antibody_dna(dat_dna, antibs[0], n_pcs, drop_first,
                                  lim_features, lim_molecule, max_molecule, min_cells, min_cells_bin,
                                  max_bin_excl, harmonize, n_neighbors, resolution)
     else:
         return {ab: cluster_antibody_dna(dat_dna, ab, n_pcs, drop_first,
-                                         lim_features, lim_molecule, max_molecule, min_cells, min_cells_bin,
-                                         max_bin_excl, harmonize, n_neighbors, resolution)
+                                         min_bins=lim_features, 
+                                         min_umi=lim_molecule, 
+                                         max_umi=max_molecule, 
+                                         min_cells=min_cells, 
+                                         min_cells_bin=min_cells_bin,
+                                         max_bin_pct=max_bin_excl, 
+                                         harmonize=harmonize, 
+                                         n_neighbors=n_neighbors, 
+                                         resolution=resolution)
                 for ab in antibs if ab not in {'NA', 'Unused'}}
 
 
@@ -570,8 +677,8 @@ def scale_(u):
     return (u - np.mean(u)) / np.std(u)
 
 
-def cluster_pairedtag_rna(obj, min_umi=350, max_umi=3500, min_cells_gene=10, n_pcs=10, res=0.5,
-                          min_cells=500, n_genes=1000, n_neighbors=50, harmonize=None):
+def cluster_pairedtag_rna(obj, min_umi=350, max_umi=3500, min_cells_gene=10, n_pcs=10, res=1,
+                          min_cells=500, n_genes=1000, n_neighbors=50, max_mito=10, harmonize=None):
     """
     Cluster the RNA part of a PairedTag experiment and produce the following plots
 
@@ -610,6 +717,7 @@ def cluster_pairedtag_rna(obj, min_umi=350, max_umi=3500, min_cells_gene=10, n_p
     min_cells : The minimum number of cells to use for clustering (otherwise skip this entire function)
     n_genes : The number of variable genes to select
     n_neighbors : The number of nearest neighbors to use for Leiden / UMAP
+    max_mito : The maximum mitochondrial % to include
     harmonize : A batch factor to adjust using Harmony (None for no batches)
 
     Returns
@@ -670,6 +778,8 @@ def cluster_pairedtag_rna(obj, min_umi=350, max_umi=3500, min_cells_gene=10, n_p
     if PDF:
         plt.savefig(PDF, format='pdf', dpi=250)
         plt.close()
+
+    obj = obj[obj.obs.pct_mito <= max_mito]
     
     print('Variable genes + PCA...')
 
@@ -706,7 +816,7 @@ def cluster_pairedtag_rna(obj, min_umi=350, max_umi=3500, min_cells_gene=10, n_p
 
     if harmonize is not None:
         scp.external.pp.harmony_integrate(obj, key=harmonize, basis='X_pca', adjusted_basis='X_pca_harmony',
-                                         max_iter_harmony=150)
+                                         max_iter_harmony=150, **HARMONY_ARGS['RNA'])
         rep_use = 'X_pca_harmony'
     else:
         rep_use = 'X_pca'
@@ -716,7 +826,7 @@ def cluster_pairedtag_rna(obj, min_umi=350, max_umi=3500, min_cells_gene=10, n_p
     scp.pp.neighbors(obj, n_neighbors=n_neighbors, n_pcs=n_pcs, use_rep=rep_use)
     scp.tl.umap(obj)
     scp.tl.leiden(obj, resolution=res)
-    scp.tl.tsne(obj)
+    scp.tl.tsne(obj, use_rep=rep_use)
 
     color_key = harmonize if harmonize is not None else 'assay_id'
     pca_data = pd.DataFrame.from_dict({

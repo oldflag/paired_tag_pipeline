@@ -278,8 +278,12 @@ def basename(fn):
 
 
 def get_sample_seqs(fasta_or_digest, input_fastq, library_id):
+    print(basename(input_fastq))
     if fasta_or_digest[-4:] == '.csv':
         records = [r for r in DictReader(open(fasta_or_digest))]
+        print({basename(x['fastq2']) for x in records})
+        print(library_id)
+        print({r['library_id'] for r in records})
         if library_id:
             records = [r for r in records if basename(r['fastq2']) == basename(input_fastq) and r['library_id'] == library_id]
         else:
@@ -290,6 +294,7 @@ def get_sample_seqs(fasta_or_digest, input_fastq, library_id):
 
 
 def main(args):
+    print(args)
     linker_seqs = list(read_fasta(args.linkers))
     combin_seqs = list(read_fasta(args.well_bc))
     sample_seqs = get_sample_seqs(args.sample_bc, args.R2_fastq, args.library_id)

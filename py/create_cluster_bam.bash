@@ -16,6 +16,8 @@ env | grep PATH
 
 python "${REPO}/create_cluster_bam.py" "$1" "$2" "$3"
 for bbase in `ls $3/*.bam`; do
+  echo "${bbase}"
   bname="${bbase%%.*}"
-  BAMscale scale --bam "${3}/${bbase}" -t 4 --smoothen 20
+  samtools index "${bbase}"
+  BAMscale scale --bam "${bbase}" -t 4 --smoothen 5
 done

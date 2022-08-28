@@ -5,6 +5,7 @@ all of the objects.
 
 """
 from argparse import ArgumentParser
+import numpy as np
 import scanpy as sc
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
@@ -17,6 +18,9 @@ def get_args():
     parser.add_argument('rna', help='The RNA analysis h5ad file')
     parser.add_argument('pdf', help='The output QC pdf')
     parser.add_argument('--batch', help='The batch for which to correct', default=None)
+    parser.add_argument('--fallback_select', help='Only use count thresholds for selection', action='store_true')
+    parser.add_argument('--dna_out', help='base name for the output DNA CSV files', default=None)
+    parser.add_argument('--fallback_umi', help='The fallback UMI', default=350, type=int)
 
     return parser.parse_args()
 
@@ -26,20 +30,30 @@ def main(args):
         cu.PDF = pdf  # set the output
         # rna first
         obj = sc.read_h5ad(args.rna)
-        obj = cu.select_cells(obj, fallback_rna_umi=300, fallback_dna_umi=300)
+        if (obj.obs.antibody_name == 'NA').any():
+            dna_fallback = 0
+        else:
+            dna_fallback = args.fallback_umi
+        obj = cu.select_cells(obj, fallback_rna_umi=args.fallback_umi, fallback_dna_umi=dna_fallback, fallback_only=args.fallback_select)
         obj = obj[obj.obs.keep_cell_].copy()
-        obj = cu.cluster_pairedtag_rna(obj, min_umi=1, n_genes=2000, max_umi=3000,
-                                       harmonize=args.batch, n_pcs=15)  
+        obj = obj[obj.obs.rna_umis >= 1000]
+        obj = obj[obj.obs.rna_umis <= 5000]
+        obj = cu.cluster_pairedtag_rna(obj, min_umi=500, n_genes=4000, max_umi=5000, harmonize=args.batch,
+                                       n_pcs=20)
         # no minimum since select cells did it already
         
         # dna next
         obj = sc.read_h5ad(args.dna)
-        obj = cu.select_cells(obj, fallback_dna_umi=300, fallback_rna_umi=300)
+        obj = obj[np.where(obj.obs.antibody_name != 'NA')[0], :]
+        obj = cu.select_cells(obj, fallback_dna_umi=args.fallback_umi, fallback_rna_umi=args.fallback_umi, fallback_only=args.fallback_select)
         obj = obj[obj.obs.keep_cell_].copy()
-        obj = cu.cluster_pairedtag_dna(obj, lim_features=1, lim_molecule=1, max_molecule=4000,
-                                       harmonize=args.batch)
+        obj = cu.cluster_pairedtag_dna(obj, lim_features=1, lim_molecule=350, max_molecule=100000, harmonize=args.batch,
+                                       n_pcs=10, min_cells_bin=50)
 
-
+        if args.dna_out is not None:
+            for ab in obj.keys():
+                of = args.dna_out + '.' + ab + '.csv'
+                obj[ab].obs.to_csv(of)
 
 
 if __name__ == '__main__':
