@@ -1,0 +1,11 @@
+name: splitbam
+channels:
+  - defaults
+  - conda-forge
+  - bioconda
+dependencies:
+  - samtools
+  - pysam
+  - pandas
+  - bamscale
+prefix: /home/app.dev1/anaconda3/envs/splitbam

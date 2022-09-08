@@ -59,8 +59,8 @@ process star_aligner_single {
 process basic_bwa {
   conda params.HOME_REPO + '/nf/envs/bwa.yaml'
 
-  input
-    tuple val(sequence_id), file(fq1), file(fq2), file(fq3)
+  input:
+    tuple val(sequence_id), val(fq1), val(fq2), val(fq3)
 
   output:
     tuple val(sequence_id), file(bam)
@@ -70,16 +70,16 @@ process basic_bwa {
     int_bam="${sequence_id}.uns.bam"
     """
     if [ "${fq2}" == "null" ]; then
-        bwa mem -R "@RG\tID:${sequence_id}.RG\tSM:${sequence_id}\tPL:UNK\tPU:UNK}" \
+        bwa mem -R "@RG\\tID:${sequence_id}.RG\\tSM:${sequence_id}\\tPL:UNK\\tPU:UNK}" \
                 -t $params.alignment_ncore -k 17 $params.genome_reference $fq1 | samtools view -hb > ${int_bam}
     elif [ "${fq3}" == "null" ]; then
-        bwa mem -R "@RG\tID:${sequence_id}.RG\tSM:${sequence_id}\tPL:UNK\tPU:UNK" \
+        bwa mem -R "@RG\\tID:${sequence_id}.RG\\tSM:${sequence_id}\\tPL:UNK\\tPU:UNK" \
                 -t $params.alignment_ncore -k 17 $params.genome_reference $fq1 $fq2 | samtools view -hb > ${int_bam}
     else
-        bwa mem -R "@RG\tID:${sequence_id}.RG\tSM:${sequence_id}\tPL:UNK\tPU:UNK" \
+        bwa mem -R "@RG\\tID:${sequence_id}.RG\\tSM:${sequence_id}\\tPL:UNK\\tPU:UNK" \
                 -t $params.alignment_ncore -k 17 $params.genome_reference $fq1 $fq2 | samtools view -hb > ${sequence_id}.p.bam
 
-        bwa mem -R "@RG\tID:${sequence_id}.RG\tSM:${sequence_id}\tPL:UNK\tPU:UNK" \
+        bwa mem -R "@RG\\tID:${sequence_id}.RG\\tSM:${sequence_id}\\tPL:UNK\\tPU:UNK" \
                 -t $params.alignment_ncore -k 17 $params.genome_reference $fq3 | samtools view -hb > ${sequence_id}.w.bam
 
         samtools merge -o $int_bam ${sequence_id}.p.bam ${sequence_id}.w.bam

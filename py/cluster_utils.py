@@ -65,7 +65,8 @@ def binary_jaccard(adata):
     or_ = atot[:, None] + atot - and_
     J = and_ / or_
     C = np.mean(A, axis=1).A1
-    E = np.outer(C, C)/((C[np.newaxis,:] + C[:, np.newaxis]) - np.outer(C, C))
+    E = np.reciprocal(1/C[np.newaxis,:] + 1/C[:, np.newaxis] - 1)
+    #E = np.outer(C, C)/((C[np.newaxis,:] + C[:, np.newaxis]) - np.outer(C, C))
     return J.A, E, C
 
 
@@ -103,6 +104,12 @@ def blockwise_normalize_jaccard(Jm, Em, libs, nadj=500, winsor=99.0):
     -------
     A normalized Jaccard matrix
     """
+    k = Jm.shape[0]
+    scale_ = (Jm/Em).mean()
+    q = np.percentile(Jm[np.tril_indices(Jm.shape[0], -1)], winsor)
+    Jm[Jm > q] = q
+    Jm[np.diag_indices(k)] = scale_ * np.diag(Em)
+    R = 0 * Jm   # allocate the residual matrix
     lib_uq = list(set(libs))
     nlib = len(lib_uq)
     for i in range(nlib):
@@ -116,23 +123,35 @@ def blockwise_normalize_jaccard(Jm, Em, libs, nadj=500, winsor=99.0):
                 ix = np.random.choice(k_i*k_j, nadj)
             else:
                 ix = np.arange(k_i*k_j)
-            ex = Em[np.ix_(idx, jdx)].ravel()[ix]
-            jx = Jm[np.ix_(idx, jdx)].ravel()[ix]
-            poly = np.polyfit(ex, jx, deg=2)
-            Em[np.ix_(idx, jdx)] = np.polyval(poly, Em[np.ix_(idx, jdx)].ravel()).reshape((k_i, k_j))
-            Em[np.ix_(jdx, idx)] = np.polyval(poly, Em[np.ix_(jdx, idx)].ravel()).reshape((k_j, k_i))
-    Em[np.diag_indices_from(Em)] = 1.
-    print(Jm[:5,:5])
-    J = Jm/Em
-    print(J[:5,:5])
-    q = np.percentile(J[np.tril_indices(J.shape[0], -1)], winsor)
-    J[J>q] = q
-    J[np.diag_indices_from(J)] = 1.
+            poly = np.polyfit(Em[np.ix_(idx, jdx)].ravel()[ix],
+                              Jm[np.ix_(idx, jdx)].ravel()[ix],
+                              deg=2)
+            R[np.ix_(idx, jdx)] = (Jm[np.ix_(idx, jdx)].ravel() - np.polyval(poly, Em[np.ix_(idx, jdx)].ravel())).reshape((k_i, k_j))
+            R[np.ix_(jdx, idx)] = (Jm[np.ix_(jdx, idx)].ravel() - np.polyval(poly, Em[np.ix_(jdx, idx)].ravel())).reshape((k_j, k_i))
 
-    return J
+    return (R - np.mean(R, axis=0))/np.std(R, axis=0)
 
 
-def normalize_jaccard(Jm, Em, nadj=500, winsor=99.0):
+def normalize_jaccard_snapatac(Jm, Em, nadj=500, winsor=99.0):
+    k = Jm.shape[0]
+    q = np.percentile(Jm[np.tril_indices(k, -1)], winsor)
+    Jm[Jm > q] = q
+    scale_ = (Jm/Em).mean()
+    Jm[np.diag_indices(k)] = scale_ * np.diag(Em)
+    ix = np.random.choice(k*k, nadj)
+    # fit the polynomial model
+    poly = np.polyfit(Em.ravel()[ix],
+                      Jm.ravel()[ix],
+                      deg=2)
+    R = (Jm.ravel() - np.polyval(poly, Em.ravel())).reshape(Jm.shape)
+    R = (R - np.mean(R, axis=0))/np.std(R, axis=0)
+    R[R > 5] = 5
+    R[R < -5] = -5
+    R = (R - np.mean(R, axis=0))/np.std(R, axis=0)
+    return R
+
+
+def normalize_jaccard_snapatac2(Jm, Em, nadj=500, winsor=99.0):
     """
     Normalize a Jaccard matrix given the expected overlap matrix
 
@@ -167,9 +186,13 @@ def normalize_jaccard(Jm, Em, nadj=500, winsor=99.0):
     # winsorize
     q = np.percentile(J[np.tril_indices(k, -1)], winsor)
     J[J > q] = q
+    J=J/q
     J[np.diag_indices(k)] = 1  # reset diagonal
 
     return J
+
+
+normalize_jaccard = normalize_jaccard_snapatac2
 
 
 def jaccard_diagnostics(dn_adata, n_approx=500, winsor=99.0, title=''):
@@ -189,8 +212,8 @@ def jaccard_diagnostics(dn_adata, n_approx=500, winsor=99.0, title=''):
      + Empaneled pairwise jaccard boxplot
     """
     J, E, C = binary_jaccard(dn_adata)
-    Jn = blockwise_normalize_jaccard(J, E, dn_adata.obs.library_id.astype(str), n_approx, winsor)
-    #Jn = normalize_jaccard(J, E, n_approx, winsor)
+    #Jn = blockwise_normalize_jaccard(J, E, dn_adata.obs.library_id.astype(str), n_approx, winsor)
+    Jn = normalize_jaccard(J, E, n_approx, winsor)
     D = Jn.sum(axis=1)
     assay_diagn = pd.DataFrame.from_dict({
         'assay_id': dn_adata.obs.assay_id.values,
@@ -519,12 +542,12 @@ def find_modes1d(xdata, res=5000, bw=0.225):
     return x[np.where(p2n)], x[np.where(n2p)]
 
 
-def select_cells_assay_(anndata, assay_id, fallback_dna_umi, fallback_rna_umi, fallback_only=False, min_th=0.75, max_th=1.25):
+def select_cells_assay_(anndata, assay_id, library_id, fallback_dna_umi, fallback_rna_umi, fallback_only=False, min_th=0.75, max_th=1.25):
     """
     Automatically select cells based on the dna/rna read distribution by searching for
     modes in a (typically) bimodal distribution.
     """
-    assay_ix = np.where(anndata.obs.assay_id == assay_id)[0]
+    assay_ix = np.where((anndata.obs.assay_id == assay_id) & (anndata.obs.library_id == library_id))[0]
     if anndata.obs.antibody_name.values[assay_ix[0]] == 'NA':
         r = np.sqrt(np.log10(anndata.obs.rna_reads.values[assay_ix]) ** 2)
         theta = (0 * r) + 1
@@ -592,33 +615,38 @@ def select_cells(anndata, fallback_dna_umi=350, fallback_rna_umi=350, fallback_o
     """
     print('Selecting cells...')
     anndata.obs.loc[:, 'keep_cell_'] = False  # set all to false (to generate the column)
-    for assay_id in anndata.obs.assay_id.unique():
-        anndata = select_cells_assay_(anndata, assay_id, fallback_dna_umi, fallback_rna_umi, fallback_only)
+    for library_id in anndata.obs.library_id.unique():
+        for assay_id in anndata.obs.assay_id.unique():
+            # check that there are some records
+            n = ((anndata.obs.library_id == library_id) & (anndata.obs.assay_id == assay_id)).sum()
+            if n > 0:
+                anndata = select_cells_assay_(anndata, assay_id, library_id, fallback_dna_umi, fallback_rna_umi, fallback_only)
 
-    assay_ids = anndata.obs.assay_id.unique()
-    n_ids = len(assay_ids)
-    rr, cc = int(np.sqrt(n_ids)) + 1, int(np.sqrt(n_ids)) + 1
-    print((n_ids, rr, cc))
-    fig, axs = plt.subplots(rr, cc, figsize=(6 * 3, 6 * 3))
-    for i, aid in enumerate(assay_ids):
-        r = min(int(i / cc), cc) - 1
-        c = i % cc
-        print((i,r,c))
-        dsub = anndata[anndata.obs.assay_id == aid]
-        axs[r, c].scatter(dsub.obs.rna_reads, dsub.obs.dna_reads, s=1)
-        dsub2 = dsub[dsub.obs.keep_cell_]
-        axs[r, c].scatter(dsub2.obs.rna_reads, dsub2.obs.dna_reads, s=1)
-        axs[r, c].set_xscale('log')
-        axs[r, c].set_yscale('log')
-        axs[r, c].set_xlabel('RNA reads')
-        axs[r, c].set_ylabel('DNA reads')
-        axs[r, c].set_title(aid, fontsize=8)
-        axs[r, c].set_rasterized(True)
-
-    plt.gca().set_rasterized(True)
-    if PDF:
-        plt.savefig(PDF, format='pdf', dpi=250)
-        plt.close()
+    library_ids = anndata.obs.library_id.unique()
+    rr, cc = (3, 4)
+    for library_id in library_ids:
+        fig, axs = plt.subplots(rr, cc, figsize=(6 * 3, 6 * 3))
+        fig.suptitle(library_id)
+        assay_ids = anndata[anndata.obs.library_id == library_id].obs.assay_id.unique()
+        for i, aid in enumerate(assay_ids):
+            r = min(int(i / cc), cc) - 1
+            c = i % cc
+            print((i,r,c))
+            dsub = anndata[(anndata.obs.assay_id == aid) & (anndata.obs.library_id == library_id)]
+            axs[r, c].scatter(dsub.obs.rna_reads, dsub.obs.dna_reads, s=1)
+            dsub2 = dsub[dsub.obs.keep_cell_]
+            axs[r, c].scatter(dsub2.obs.rna_reads, dsub2.obs.dna_reads, s=1)
+            axs[r, c].set_xscale('log')
+            axs[r, c].set_yscale('log')
+            axs[r, c].set_xlabel('RNA reads')
+            axs[r, c].set_ylabel('DNA reads')
+            axs[r, c].set_title(aid, fontsize=8)
+            axs[r, c].set_rasterized(True)
+    
+        plt.gca().set_rasterized(True)
+        if PDF:
+            plt.savefig(PDF, format='pdf', dpi=250)
+            plt.close()
 
     return anndata
 

@@ -215,7 +215,7 @@ process annotate_multiple_features {
     samtools index "${annot_bam1}"
     samtools index "${annot_bam2}"
 
-    python "\${pyf}" "${annot_bam1}:XT:${destination_tag1}"  "${annot_bam2}:XT:${destination_tag2}" "${merged_bam}" 2>&1 > "${merge_log}"
+    python "\${pyf}" "${annot_bam1}:XT:${destination_tag1}"  "${annot_bam2}:XT:${destination_tag2}" --drop XS "${merged_bam}" 2>&1 > "${merge_log}"
 
 
     """
