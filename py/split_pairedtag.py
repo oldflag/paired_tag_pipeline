@@ -21,7 +21,6 @@ def get_args():
     parser.add_argument('linkers', help='The linker fasta file')
     parser.add_argument('outdir', help='The output directory')
     parser.add_argument('--threads', help='The number of threads to use', default=1, type=int)
-    parser.add_argument('--umi_size', help='The size of the UMI in bp', default=10, type=int)
     parser.add_argument('--library_id', help='The library id to use (otherwise infer from fastq)', default=None, type=str)
     parser.add_argument('--sequence_id', help='The sequence id', default=None)
     parser.add_argument('--min_rlen', help='Minimum R1 read length for output', default=30, type=int)
@@ -33,7 +32,7 @@ def get_args():
 def read_barcode_files(args):
     linker_seqs = list(read_fasta(args.linkers))
     combin_seqs = list(read_fasta(args.well_bc))
-    sample_seqs = pr2.get_sample_seqs(args.sample_bc, args.R2_fastq, args.library_id)
+    sample_seqs = pr2.get_sample_seqs(args.sample_manifest, args.R2_fastq, args.library_id)
     print(sample_seqs)
 
     pr2.check_args(args, linker_seqs, sample_seqs, combin_seqs)
@@ -86,13 +85,16 @@ def annotate_reads(r1_recs, r2_recs, linker1, linker2, umi_size, barcode_size,
                    sample_size, linker_size, barcode_map, sample_map):
     barcodes = pr2.parse_barcodes_chunk(r2_recs, linker1, linker2, umi_size, barcode_size, sample_size,
                                         linker_size, barcode_map, sample_map)
+    reads = list()
     for read, (name, ident, barcodes) in zip(r1_recs, barcodes):
         rname = name + '|' + ident + '|' + barcodes
         if ident == '*':
             sm = '*'
         else:
             sm = ident.split(':')[-1]
-        yield sm, fastq_record(rname, read.seq, read.qual)
+    reads.append((sm, fastq_record(rname, read.seq, read.qual)))
+
+    return reads
 
 
 def annotate_reads_(args):
