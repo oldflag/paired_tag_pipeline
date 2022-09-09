@@ -3,7 +3,7 @@ Extract barcode information from read names, and place them into
 read tags for downstream processing.
 """
 from argparse import ArgumentParser
-from collections import Counter
+from collections import Counter, OrderedDict
 import pysam
 
 
@@ -66,15 +66,15 @@ class TrackWindow(object):
             return []
 
         if len(self.window) > 20 or self.done_:
-            self.window = [int for int in self.window if not is_before(int, loc, self.refs)]  # filter
-        while len(self.window) == 0 or not is_after(loc, self.window[-1], self.refs):
+            self.window = [iv for iv in self.window if not is_before(iv, loc, self.refs)]  # filter
+        while len(self.window) == 0 or not is_after(self.window[-1], loc, self.refs):
             try:
                 self.window.append(next(self.track_iter))
             except StopIteration:
                 self.done_ = True
                 break
 
-        return [iv[-1] for iv in self.window if overlaps(iv, loc)]
+        return [iv[-1] for iv in self.window if overlaps(loc, iv)]
 
 
 class TrackOracle(object):
