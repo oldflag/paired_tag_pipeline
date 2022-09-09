@@ -9,7 +9,7 @@ from argparse import ArgumentParser
 import parse_R2 as pr2
 from itertools import islice
 from multiprocessing import Pool
-from utils import read_fasta, read_fastq, xopen, fastq_record
+from utils import read_fasta, read_fastq, dxopen as xopen, fastq_record
 
 
 def get_args():
@@ -33,7 +33,6 @@ def read_barcode_files(args):
     linker_seqs = list(read_fasta(args.linkers))
     combin_seqs = list(read_fasta(args.well_bc))
     sample_seqs = pr2.get_sample_seqs(args.sample_manifest, args.R2_fastq, args.library_id)
-    print(sample_seqs)
 
     pr2.check_args(args, linker_seqs, sample_seqs, combin_seqs)
 
@@ -69,7 +68,7 @@ def iter_chunk_args(r1_fastq, r2_fastq, linker1, linker2, barcode_map,
     """
     barcode_size = len(pr2.inext(barcode_map))
     sample_size = len(pr2.inext(sample_map))
-    linker_size = len(linker1)
+    linker_size = len(linker1.seq)
     r1_iter, r2_iter = read_fastq(r1_fastq), read_fastq(r2_fastq)
     r1_chunk = list(islice(r1_iter, chunk_size))
     r2_chunk = list(islice(r2_iter, chunk_size))
@@ -83,7 +82,7 @@ def iter_chunk_args(r1_fastq, r2_fastq, linker1, linker2, barcode_map,
 
 def annotate_reads(r1_recs, r2_recs, linker1, linker2, umi_size, barcode_size,
                    sample_size, linker_size, barcode_map, sample_map):
-    barcodes = pr2.parse_barcodes_chunk(r2_recs, linker1, linker2, umi_size, barcode_size, sample_size,
+    barcodes = pr2.parse_barcodes_chunk(r2_recs, linker1.seq, linker2.seq, umi_size, barcode_size, sample_size,
                                         linker_size, barcode_map, sample_map)
     reads = list()
     for read, (name, ident, barcodes) in zip(r1_recs, barcodes):
@@ -91,8 +90,8 @@ def annotate_reads(r1_recs, r2_recs, linker1, linker2, umi_size, barcode_size,
         if ident == '*':
             sm = '*'
         else:
-            sm = ident.split(':')[-1]
-    reads.append((sm, fastq_record(rname, read.seq, read.qual)))
+            sm = ident.split(':')[-2]
+        reads.append((sm, fastq_record(rname, read.seq, read.qual)))
 
     return reads
 
@@ -120,7 +119,7 @@ def main(args):
         pool = Pool(args.threads)
         chunk_iter = pool.imap(annotate_reads_, annot_args)
 
-    for read_chunk in chunk_iter:
+    for i, read_chunk in enumerate(chunk_iter):
         for sample_id, record in read_chunk:
             handle_map[sample_id].write('@' + record.name + '\n')
             handle_map[sample_id].write(record.seq + '\n')

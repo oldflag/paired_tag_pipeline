@@ -62,7 +62,7 @@ class TrackWindow(object):
             return []
 
         self.window = [int for int in self.window if not is_before(int, loc, self.refs)]  # filter
-        while len(self.window) == 0 or not is_after(loc, self.window[-1]):
+        while len(self.window) == 0 or not is_after(loc, self.window[-1], self.refs):
             try:
                 self.window.append(next(self.track_iter))
             except StopIteration:
@@ -78,7 +78,7 @@ class TrackOracle(object):
     genomic positions
     """
     def __init__(self, refnames, tracks=None):
-        self.reference_order_ = refnames
+        self.reference_order_ = {k: i for i, k in enumerate(refnames)}
         self.tracks_ = OrderedDict()
         self.offsets_ = OrderedDict()
         if tracks is not None:
@@ -103,11 +103,11 @@ def main(args):
     bam = pysam.AlignmentFile(args.bam)
     # marshall tracks
     track_info = [x.split(':') for x in args.track]  # format :: --track /path/to/file.saf:XT:SAF
-    tracks = TrackOracle(bam.reference_names, tracks=track_info)
+    tracks = TrackOracle(bam.references, tracks=track_info)
     # open the output bam file with a copied handle
-    outbam = pysam.AlignmentFile(args.outbam, template=bam)
+    outbam = pysam.AlignmentFile(args.outbam, template=bam, mode='w')
     for read in bam.fetch():
-        if read.is_aligned:
+        if read.is_mapped:
             tags = tracks.query(read)
             for tag, value in tags.items():
                 read.set_tag(tag, value)
