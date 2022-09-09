@@ -43,6 +43,7 @@ RE_LENGTH = 8
 
 inext = lambda q: next(iter(q))
 
+
 def get_args():
     parser = ArgumentParser('PairedTag_R2_Parser')
     parser.add_argument('R2_fastq', help='The R2 fastq file')
@@ -201,6 +202,7 @@ def extract_barcodes(seq, linker1, linker2, lumi, lbc, lsn, lln):
 def parse_R2_barcodes_(args):
     return parse_barcodes_chunk(*args)
 
+
 def parse_barcodes_chunk(reads, l1, l2, umi_bp, bc_bp, sn_bp, ln_bp,
                          bc_map, sn_map):
     """
@@ -272,6 +274,7 @@ def rescue(seq, seqmap):
             return val
 
     return '*'
+
 
 def basename(fn):
     return fn.split('/')[-1]
