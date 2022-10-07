@@ -10,6 +10,7 @@ import parse_R2 as pr2
 from itertools import islice
 from multiprocessing import Pool
 from utils import read_fasta, read_fastq, dxopen as xopen, fastq_record
+from csv import DictReader
 
 
 def get_args():
@@ -86,7 +87,7 @@ def annotate_reads(r1_recs, r2_recs, linker1, linker2, umi_size, barcode_size,
                                         linker_size, barcode_map, sample_map)
     reads = list()
     for read, (name, ident, barcodes) in zip(r1_recs, barcodes):
-        rname = name + '|' + ident + '|' + barcodes
+        rname = name.split(" ")[0] + '|' + ident + '|' + barcodes
         if ident == '*':
             sm = '*'
         else:
@@ -100,6 +101,18 @@ def annotate_reads_(args):
     return annotate_reads(*args)
 
 
+def build_sample_fq_map(manifest_f, assay_ids, this_seq_id):
+    reader = DictReader(open(manifest_f), delimiter=',')
+    records = {r['assay_id']: r for r in reader if r['sequence_id'] == this_seq_id}
+    fqs = dict()
+    for aid in assay_ids:
+        rec = records[aid]
+        sid, ab = rec['sequence_id'], rec['antibody_name']
+        fqf = f'{sid}__{aid}__{ab}__1.fq.gz'
+        fqs[aid] = fqf
+    return fqs
+
+
 def main(args):
     # marshall the arguments
     linker_seqs, combin_seqs, sample_seqs, linker_size, sb_size, cb_size, sample_seqmap, combin_seqmap = read_barcode_files(args)
@@ -108,10 +121,11 @@ def main(args):
     annot_args = iter_chunk_args(args.R1_fastq, args.R2_fastq, linker_seqs[0], linker_seqs[1],
                                  combin_seqmap, sample_seqmap, args.umi_size)
 
-    base = args.outdir + '/' + sequence_id
-    handle_map = {sm: xopen(base + '_' + sm + '.fq.gz', 'wt')
-                  for sm in sample_seqmap.values()}
-    handle_map['*'] = xopen(base + '_unmatched.fq.gz', 'wt')
+    base = args.outdir + '/'
+    sample_fq_map = build_sample_fq_map(args.sample_manifest, list(sample_seqmap.values()), args.sequence_id)
+    handle_map = {sm: xopen(base + fq, 'wt')
+                  for sm, fq in sample_fq_map.items()}
+    handle_map['*'] = xopen(base + '%sUNK__UNK__UNK_unmatched.fq.gz' % args.library_id, 'wt')
 
     if args.threads <= 1:
         chunk_iter = map(annotate_reads_, annot_args)

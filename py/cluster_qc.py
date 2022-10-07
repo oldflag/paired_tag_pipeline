@@ -25,6 +25,7 @@ def get_args():
     parser.add_argument('--max_rna_umi', type=int, help='Maximum RNA UMI', default=5000)
     parser.add_argument('--min_dna_umi', type=int, help='Minimum DNA UMI', default=500)
     parser.add_argument('--rna_ngenes', help='Number of genes to use for clustering', default=1500, type=int)
+    parser.add_argument('--min_cells_rna', help='Minimum number of cells for RNA', default=500, type=int)
 
     return parser.parse_args()
 
@@ -41,7 +42,7 @@ def main(args):
         obj = cu.select_cells(obj, fallback_rna_umi=args.fallback_umi, fallback_dna_umi=dna_fallback, fallback_only=args.fallback_select)
         obj = obj[obj.obs.keep_cell_].copy()
         obj = cu.cluster_pairedtag_rna(obj, min_umi=args.min_rna_umi, n_genes=args.rna_ngenes, max_umi=args.max_rna_umi, harmonize=args.batch,
-                                       n_pcs=20)
+                                       n_pcs=20, min_cells=args.min_cells_rna)
         # no minimum since select cells did it already
         
         # dna next

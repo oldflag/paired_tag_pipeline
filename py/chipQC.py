@@ -70,7 +70,11 @@ def getUMI(read):
 def group_umi(reads):
     rbg = defaultdict(list)
     for read in reads:
-        grp = (read.get_tag('RG'), read.get_tag('CB'), getUMI(read))
+        if read.has_tag('RG'):
+            grp = (read.get_tag('RG'), read.get_tag('CB'), getUMI(read))
+        else:
+            lib = read.get_tag('CB').split(':')[0]
+            grp = (lib + '__UNK__UNK__UNK', read.get_tag('CB'), read.get_tag('CR').split(':')[0]) 
         rbg[grp].append(read)
     return rbg
 
@@ -376,7 +380,7 @@ def main(args):
         out.write('sample_id\tlibrary\tsample\tcell\tfilter\ttarget\ttype\tcount\n')
         for fullcell in stat_counts:
             sample_id, cell = fullcell.split('.',1)
-            library, sample, antibody, _ = sample_id.split('__') 
+            library, sample, antibody = sample_id.split('__')[:3]
             for k1 in ('retained', 'filtered_MQ30'):
                 for k2 in ('in_peak', 'off_target', 'in_enhancer', 'in_promoter', 'in_genebody'):
                     for k3 in ('reads', 'umi'):
@@ -391,7 +395,7 @@ def main(args):
         with open(args.sample_out, 'wt') as out:
             out.write('sample_id\tlibrary\tsample\tfeature\tmetric\tvalue\n')
             for sample_id, sample_stats in compute_sample_stats(stat_counts).items():
-                library, sample, antibody, _ = sample_id.split('__')
+                library, sample, antibody = sample_id.split('__')[:3]
                 for k1, dct in sample_stats.items():
                     for k2, v in dct.items():
                         out.write(f'{sample_id}\t{library}\t{sample}\t{k1}\t{k2}\t{v}\n')

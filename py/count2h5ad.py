@@ -42,6 +42,8 @@ def main(args):
     with xopen(args.counts, 'rt') as hdl:
         next(hdl)  # header
         for feature, cell, count_str in (x.strip().split('\t') for x in hdl):
+            if '*' in cell:
+                continue
             if cell not in row_map:
                 row_map[cell] = len(row_map)
                 cell_counts[cell], cell_features[cell] = 0, 0

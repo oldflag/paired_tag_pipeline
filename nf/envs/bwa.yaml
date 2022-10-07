@@ -8,4 +8,5 @@ dependencies:
   - openssl=1.0
   - samtools
   - pysam
+  - cutadapt
 prefix: /home/app.dev1/anaconda3/envs/bwa

@@ -9,6 +9,7 @@ import scipy as sp
 from matplotlib import pyplot as plt
 import seaborn as sbn
 import warnings
+from sklearn.cluster import KMeans
 
 HARMONY_ARGS = {
   'RNA': dict(),
@@ -118,7 +119,7 @@ def blockwise_normalize_jaccard(Jm, Em, libs, nadj=500, winsor=99.0):
         for j in range(i, nlib):
             jdx = np.where(libs == lib_uq[j])[0]
             k_j = jdx.shape[0]
-            print('Jaccard: (%s x %s) -> (%d x %d)' % (lib_uq[i], lib_uq[j], k_i, k_j))
+            #print('Jaccard: (%s x %s) -> (%d x %d)' % (lib_uq[i], lib_uq[j], k_i, k_j))
             if k_i * k_j > nadj:
                 ix = np.random.choice(k_i*k_j, nadj)
             else:
@@ -358,7 +359,10 @@ def do_dna_cluster_(dat_dna_analysis, npc, drop_first=True, resolution=0.5,
                                         n_neighbors=n_neighbors)
     dat_dna_analysis = scp.tl.umap(dat_dna_analysis, copy=True)
     dat_dna_analysis = scp.tl.tsne(dat_dna_analysis, use_rep=rep_use, n_pcs=npc, copy=True)
-    dat_dna_analysis = scp.tl.leiden(dat_dna_analysis, copy=True, resolution=resolution)
+    #dat_dna_analysis = scp.tl.leiden(dat_dna_analysis, copy=True, resolution=resolution)
+    #dat_dna_analysis = scp.tl.louvain(dat_dna_analysis, copy=True, resolution=resolution)
+    km = KMeans(n_clusters=12, random_state=123).fit(dat_dna_analysis.obsm[rep_use])
+    dat_dna_analysis.obs.loc[:, 'leiden'] = km.labels_
 
     fig, axs = plt.subplots(2, 3, constrained_layout=True, figsize=(6*2.5, 4*2.5))
     axs[0, 0].scatter(np.arange(s.shape[0]), s, color='black', s=2)
@@ -590,6 +594,7 @@ def select_cells_assay_(anndata, assay_id, library_id, fallback_dna_umi, fallbac
             dna_u, rna_u = anndata.obs.dna_umis.values[assay_ix], anndata.obs.rna_umis.values[assay_ix]
             ix2 = np.where((dna_u >= fallback_dna_umi) & (rna_u >= fallback_rna_umi))
             keep_idx = assay_ix[ix2]
+    print('Selected_%s: %d' % (library_id, keep_idx.shape[0]))
 
 
     keep_vec[keep_idx] = True
@@ -760,6 +765,7 @@ def cluster_pairedtag_rna(obj, min_umi=350, max_umi=3500, min_cells_gene=10, n_p
     obj.obs.loc[:, 'mito_UMI'] = obj[:, obj.var.feature_name.isin(MITO_GENES)].X.sum(axis=1)
     obj.obs.loc[:, 'pct_mito'] = 100 * obj.obs.mito_UMI / obj.obs.rna_umis
     scp.pp.filter_genes(obj, min_cells=min_cells_gene)
+    print('... final shape: %s' % (str(obj.shape)))
 
     if obj.shape[0] < min_cells:
         obj.obs.loc[:, 'leiden'] = np.nan
@@ -853,8 +859,11 @@ def cluster_pairedtag_rna(obj, min_umi=350, max_umi=3500, min_cells_gene=10, n_p
 
     scp.pp.neighbors(obj, n_neighbors=n_neighbors, n_pcs=n_pcs, use_rep=rep_use)
     scp.tl.umap(obj)
-    scp.tl.leiden(obj, resolution=res)
+    #scp.tl.leiden(obj, resolution=res)
     scp.tl.tsne(obj, use_rep=rep_use)
+    km = KMeans(n_clusters=12, random_state=123).fit(obj.obsm[rep_use])
+    obj.obs.loc[:, 'leiden'] = km.labels_
+
 
     color_key = harmonize if harmonize is not None else 'assay_id'
     pca_data = pd.DataFrame.from_dict({
@@ -885,6 +894,8 @@ def cluster_pairedtag_rna(obj, min_umi=350, max_umi=3500, min_cells_gene=10, n_p
     if PDF:
         plt.savefig(PDF, format='pdf', dpi=250)
         plt.close()
+    else:
+        print('PDF is null in RNA')
 
     fig, axs = plt.subplots(2, 3, constrained_layout=True, figsize=(6 * 2.5, 4 * 2.5))
     sbn.scatterplot(data=pca_data, x='UMAP1', y='UMAP2', hue='leiden', legend=False, ax=axs[0, 0], s=3)

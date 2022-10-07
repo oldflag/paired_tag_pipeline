@@ -38,6 +38,7 @@ def unmelt(df, cond_list, value_column, ix_column):
         srs = df_sub.loc[:, value_column]
         if um_df is None:
             um_df = df_sub.copy()
+        print(df_sub)
         um_df.loc[:, keyname] = srs[df_sub.index]
     return um_df
 

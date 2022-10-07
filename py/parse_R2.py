@@ -291,6 +291,7 @@ def get_sample_seqs(fasta_or_digest, input_fastq, library_id):
             records = [r for r in records if basename(r['fastq2']) == basename(input_fastq) and r['library_id'] == library_id]
         else:
             records = [r for r in records if basename(r['fastq2']) == basename(input_fastq)]
+        print(records)
         return [fasta_record(r['assay_id'], r['barcode']) for r in records] 
     else:
         return list(read_fasta(fasta_or_digest))

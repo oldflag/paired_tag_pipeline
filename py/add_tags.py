@@ -16,6 +16,7 @@ def overlaps(loc1, loc2, ctg_odr=None):
 
 
 def is_before(loc1, loc2, ctg_odr):
+    #print((loc1, loc2))
     return ctg_odr[loc1[0]] < ctg_odr[loc2[0]] or (loc1[0] == loc2[0] and loc1[2] < loc2[1])
 
 
@@ -38,7 +39,8 @@ def load_track(interval_file, format, ref_order):
             next(hdl)
         for line in hdl:
             fields = line.strip().split('\t')
-            intervals.append((fields[ix_[0]], int(fields[ix_[1]]), int(fields[ix_[2]]), fields[ix_[3]]))
+            if fields[ix_[0]] in ro:
+                intervals.append((fields[ix_[0]], int(fields[ix_[1]]), int(fields[ix_[2]]), fields[ix_[3]]))
 
     intervals.sort(key=lambda iv: interval_key(iv, ro))
     return intervals
@@ -62,11 +64,12 @@ class TrackWindow(object):
         self.done_ = False
 
     def query(self, loc):
+        if loc is None or loc[1] is -1 or loc[0] not in self.refs:
+            return []
         if self.done_ and len(self.window) == 0:
             return []
-
         if len(self.window) > 20 or self.done_:
-            self.window = [iv for iv in self.window if not is_before(iv, loc, self.refs)]  # filter
+            self.window = [iv for iv in self.window if iv[1] is not -1 and not is_before(iv, loc, self.refs)]  # filter
         while len(self.window) == 0 or not is_after(self.window[-1], loc, self.refs):
             try:
                 self.window.append(next(self.track_iter))
@@ -109,6 +112,7 @@ def get_args():
     parser.add_argument('out', help='the output bam file')
     parser.add_argument('--library', help='The library name', default='')
     parser.add_argument('--antibody', help='The antibody name', default='')
+    parser.add_argument('--sample_id', help='The sample id', default=None)
     parser.add_argument('--track', help='A track to use, format: <filepath>:<tag>:<fmt>; can specify multiple times',
                         action='append')
 
@@ -116,26 +120,30 @@ def get_args():
 
 
 def main(args):
-    handle = pysam.AlignmentFile(args.bam)
-    sample_ids = Counter(
-      (x.query_name.split('|')[2].split(':')[-2],
-       x.query_name.split('|')[1].split(':')[-2])
-      for x in handle)
-    handle.close()
+    print(args)
+    if args.sample_id is None:
+        handle = pysam.AlignmentFile(args.bam)
+        sample_ids = Counter(
+          (x.query_name.split('|')[2].split(':')[-2],
+           x.query_name.split('|')[1].split(':')[-2])
+          for x in handle if x.query_name[-1] != '*')
+        handle.close()
 
-    best = dict()
-    for (seq, sam), n in sample_ids.items():
-        if sam not in best:
-            best[sam] = (seq, n)
-        elif n > best[sam][1]:
-            best[sam] = (seq, n)
+        best = dict()
+        for (seq, sam), n in sample_ids.items():
+            if sam not in best:
+                best[sam] = (seq, n)
+            elif n > best[sam][1]:
+                best[sam] = (seq, n)
 
-    sample_ids = {k: v[0] for k, v in best.items()}
+        sample_ids = {k: v[0] for k, v in best.items()}
+    else:
+        sample_ids = {'USER_SPEC': args.sample_id}
 
     handle = pysam.AlignmentFile(args.bam)
     header_dct = handle.header.as_dict()
 
-    rgpfx = args.bam[:-len('.bam')]
+    rgpfx = args.bam[:-len('.bam')] if args.sample_id is None else args.library + '___' + args.antibody + '__' + args.sample_id
     header_dct['RG'] = [
       {'ID': f'{rgpfx}_{i}',
        'PL': 'ILLUMINA',
@@ -145,8 +153,8 @@ def main(args):
       for i, (sm, sq) in enumerate(sample_ids.items())
     ]
 
-    sam2rg = {e['SM']: e['ID'] for e in header_dct['RG']}
-    if len(args.track) > 0:
+    sam2rg = {e['SM']: e['ID'] for e in header_dct['RG']} if args.sample_id is None else {args.sample_id: f'{rgpfx}_0'}
+    if args.track is not None and len(args.track) > 0:
         track_info = [x.split(':') for x in args.track]  # format :: --track /path/to/file.saf:XT:SAF
         tracks = TrackOracle(handle.references, tracks=track_info)
     else:
@@ -188,22 +196,32 @@ def transform_read(read, read_n, sbc_rg_map, library, antibody, tracks=None):
     """
     rawname, parsed, full = read.query_name.split('|')
     read.set_tag('CR', full)
-    read.set_tag('BC', full.split(':')[-2])
+    try:
+        read.set_tag('BC', full.split(':')[-2])
+    except:
+        pass
     totname_prefix = (library + ':' + antibody).strip(':').lstrip(':')
     psplit = parsed.split(':')
-    if totname_prefix != '':
+    if totname_prefix != '' and len(psplit) > 2:
         totname = totname_prefix + f':{psplit[3]}:{psplit[1]}:{psplit[2]}'
-    else:
+    elif len(psplit) > 2:
         totname = f'{psplit[3]}:{psplit[1]}:{psplit[2]}'
+    elif totname_prefix != '':
+        totname = totname_prefix + ':*'
+    else:
+        totname = '*'
     read.set_tag('CB', totname)
-    read.set_tag('RG', sbc_rg_map[parsed.split(':')[-2]])
-    umi = parsed.split(':')[0]
+    try:
+        read.set_tag('RG', sbc_rg_map[parsed.split(':')[-2]])
+        umi = parsed.split(':')[0]
+    except:
+        umi = '*'
     if umi != '*':
         #if fragmentation happens prior to barcoding, uncomment
         #pos_hash = str(read.reference_start)[-4:]
         #if len(pos_hash) < 4:
         #    pos_hash = '0' * (4 - len(pos_hash)) + pos_hash
-        read.set_tag('MI', parsed.split(':')[0]) # + pos_hash)
+        read.set_tag('MI', umi)
     read.set_tag('XX', f'{read_n:09d}')
     read.query_name = rawname
     if tracks is not None:

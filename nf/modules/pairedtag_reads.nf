@@ -42,6 +42,44 @@ process parse_pairedtag_r2 {
 
 
 /*
+ * Parse R2, annotate R1, and split in a single process
+ * * Config-defined parameters
+ * ---------------------------
+ *  + py_dir: path to the root python directory of the 'pipelines' repo
+ *  + combin_barcodes: path to the combinatorial ("well") barcodes sequence file
+ *  + sample_barcodes: path to the sample barcodes sequence file - may be a fasta or csv
+ *  + linker_file: path to the linker sequence file
+ *  + r2_parse_threads: number of threads to use
+ *  + umi_len: the UMI length
+ */
+process process_pairedtag {
+  conda params.HOME_REPO + '/nf/envs/skbio.yaml'
+
+  input:
+    tuple val(sequence_id), file(r1_fastq), file(r2_fastq), val(library_id)
+
+  output:
+    val sequence_id
+    file 'out/*.fq.gz'
+
+  script:
+    """
+    mkdir -p out
+    python "${params.py_dir}/split_pairedtag.py" "${r1_fastq}" "${r2_fastq}" "${params.combin_barcodes}" "${params.sample_barcodes}" "${params.linker_file}" ./out/ --library_id "${library_id}" --threads "${params.r2_parse_threads}" --sequence_id "${sequence_id}" --umi_size "${params.umi_len}"
+    """
+
+  stub:
+    """
+    mkdir -p out
+    touch "out/${sequence_id}__assay01__ab01__1.fq.gz"
+    touch "out/${sequence_id}__assay02__ab01__2.fq.gz"
+    touch "out/${sequence_id}__assay01__ab01__3.fq.gz"
+    touch "out/${sequence_id}__assay02__ab02__4.fq.gz"
+    """
+}
+
+
+/*
  *
  * Produce a library-level diagnostic plot of barcode parsing
  * 
@@ -124,6 +162,13 @@ process add_tags {
   
   input:
     tuple val(alignment_id), file(bam_file), val(seqtype), val(assay_id), val(antibody)
+    tuple file(annot1_file), val(annot1_tag), val(annot1_fmt)
+    tuple file(annot2_file), val(annot2_tag), val(annot2_fmt)
+    tuple file(annot3_file), val(annot3_tag), val(annot3_fmt)
+    tuple file(annot4_file), val(annot4_tag), val(annot4_fmt)
+    tuple file(annot5_file), val(annot5_tag), val(annot5_fmt)
+    tuple file(annot6_file), val(annot6_tag), val(annot6_fmt)
+
 
   output:
     tuple val(alignment_id), file(annot_bam_file), val(seqtype), val(assay_id), val(antibody)
@@ -132,8 +177,39 @@ process add_tags {
     unsorted_bam = bam_file.simpleName - '.bam' + '_tag_uns.bam'
     annot_bam_file = bam_file.simpleName - '.bam' + '_tag.bam'
     """
-    python "${params.py_dir}"/add_tags.py "${bam_file}" "${unsorted_bam}" --library "${alignment_id}" --antibody "${antibody}"
-    samtools sort "${unsorted_bam}" -o "${annot_bam_file}"
+    strip () {
+        echo "\${1%%.*}"
+    }
+
+    tag_args=""
+    if [  \$(strip "${annot1_file}") != "input" ]; then
+        tag_args="\${tag_args} --track ${annot1_file}:${annot1_tag}:${annot1_fmt}"
+    fi
+    
+    if [  \$(strip "${annot2_file}") != "input" ]; then
+        tag_args="\${tag_args} --track ${annot2_file}:${annot2_tag}:${annot2_fmt}"
+    fi
+    if [  \$(strip "${annot3_file}") != "input" ]; then
+        tag_args="\${tag_args} --track ${annot3_file}:${annot3_tag}:${annot3_fmt}"
+    fi
+    if [  \$(strip "${annot4_file}") != "input" ]; then
+        tag_args="\${tag_args} --track ${annot4_file}:${annot4_tag}:${annot4_fmt}"
+    fi
+    if [  \$(strip "${annot5_file}") != "input" ]; then
+        tag_args="\${tag_args} --track ${annot5_file}:${annot5_tag}:${annot5_fmt}"
+    fi
+    if [  \$(strip "${annot6_file}") != "input" ]; then
+        tag_args="\${tag_args} --track ${annot6_file}:${annot6_tag}:${annot6_fmt}"
+    fi
+    mkfifo "intermediate.bam"
+    samtools sort "${bam_file}" -o "intermediate.bam" &
+
+    if [ "\${tag_args}" == "" ]; then
+        python "${params.py_dir}"/add_tags.py intermediate.bam "${annot_bam_file}" --library "${alignment_id}" --antibody "${antibody}" --sample_id "${assay_id}"
+    else
+        python "${params.py_dir}"/add_tags.py intermediate.bam "${annot_bam_file}" --library "${alignment_id}" --antibody "${antibody}" --sample_id "${assay_id}" \$tag_args
+    fi
+    rm intermediate.bam 
     """
 
   stub:

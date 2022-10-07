@@ -64,7 +64,6 @@ process rnaseqc_call {
   input:
     tuple val(sequence_id), file(bam_file), val(assay), val(antibody_name) 
     file(gtf_file)
-    file(bed_file)
 
   output:
     tuple val(sequence_id), val(assay), val(antibody_name), file(metrics_tsv), file(metrics_csv), file(exon_reads_gct), file(gene_reads_gct), file(gene_tpm_gct), file(gene_fragments_gct), file(coverage_tsv)
@@ -82,7 +81,7 @@ process rnaseqc_call {
 
 
     """
-    rnaseqc $gtf_file $bam_file --bed $bed_file --sample $basename --coverage . --unpaired
+    rnaseqc $gtf_file $bam_file --sample $basename --coverage . --unpaired
     cut -f1 "${metrics_tsv}" | sed 's/, /_/g' | tr '\n' ',' | sed 's/,\$/\\n/g' > "${metrics_csv}"
     cut -f2 "${metrics_tsv}" | sed 's/, /_/g' | tr '\n' ',' | sed 's/,\$/\\n/g' >> "${metrics_csv}"
     """

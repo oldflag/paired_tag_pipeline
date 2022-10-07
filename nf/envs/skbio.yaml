@@ -6,4 +6,6 @@ channels:
 dependencies:
   - scikit-bio
   - seaborn
+  - samtools
+  - pysam
 prefix: /home/app.dev1/anaconda3/envs/skbio
