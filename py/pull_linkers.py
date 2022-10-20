@@ -15,7 +15,6 @@ loffset = 18
 def get_args():
     p = ArgumentParser()
     p.add_argument('fastq', help='R2 fastq')
-    p.add_argument('fasta', help='Linker fasta')
     p.add_argument('logo', help='The logo output file (pdf)')
     return p.parse_args()
 
@@ -40,12 +39,9 @@ def s2c(s):
 def main(args):
     reads = read_fastq(args.fastq)
     PWM = np.zeros((len(lseq), 4), dtype=np.float32)
-    with open(args.fasta, 'wt') as out:
-        for read in reads:
-            out.write('>' + read.name + '\n')
-            bs = find_best_seq(read.seq)
-            out.write(bs + '\n')
-            PWM += s2c(bs)
+    for read in reads:
+        bs = find_best_seq(read.seq)
+        PWM += s2c(bs)
     PWM = PWM/np.sum(PWM[0,:])
     # transform to information content
     ICM = 2 + np.nansum(PWM * np.log2(PWM), axis=1)

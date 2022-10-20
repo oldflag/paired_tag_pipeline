@@ -8,4 +8,6 @@ dependencies:
   - seaborn
   - samtools
   - pysam
+  - distance
+  - logomaker
 prefix: /home/app.dev1/anaconda3/envs/skbio

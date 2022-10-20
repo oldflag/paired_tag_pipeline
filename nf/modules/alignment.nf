@@ -31,6 +31,7 @@ process star_aligner_single {
     input_fq1 = "${fastq_trimmed1}"
     assay = input_fq1.split("__")[1]
     antibody = input_fq1.split("__")[2]
+    sample = input_fq1.split("__")[3]
     tmp_fq = "trimmed.fq"
     trim_report = prefix + ".trim_report.txt"
     """
@@ -54,6 +55,7 @@ process star_aligner_single {
     input_fq1 = "${fastq_trimmed1}"
     assay = input_fq1.split("__")[1]
     antibody = input_fq1.split("__")[2]
+    sample = input_fq1.split("__")[3]
     trim_report = prefix + ".trim_report.txt"
     """
     touch "${outbam}" "${trim_report}"
@@ -117,6 +119,7 @@ process trimming_bwa {
     bam="${sequence_id}.bam"
     int_bam="${sequence_id}.uns.bam"
     """
+    mkfifo "${int_bam}"
     if [ "${fq2}" == "null" ]; then
         tmp_fq="trimmed.fq"
         mkfifo \$tmp_fq
@@ -127,7 +130,7 @@ process trimming_bwa {
     elif [ "${fq3}" == "null" ]; then
         tmp_fq1="tmp_r1.fq"
         tmp_fq2="tmp_r2.fq"
-        cutadapt -a ${params.adapter_seq} -j ${params.trim_ncores} -q ${params.trim_qual} -o \$tmp_fq1 -p \$tmp_fq2 $fq1 $fq2 > trim_report.txt &
+        cutadapt -a ${params.adapter_seq} -j ${params.trim_ncores} -q ${params.trim_qual} -o \$tmp_fq1 -p \$tmp_fq2 $fq1 $fq2 > trim_report.txt 
         bwa mem -R "@RG\\tID:${sequence_id}.RG\\tSM:${sequence_id}\\tPL:UNK\\tPU:UNK" \\
                 -t $params.alignment_ncore -k 17 $params.genome_reference \$tmp_fq1 \$tmp_fq2 | samtools view -hb > ${int_bam}
         rm \$tmp_fq1 \$tmp_fq2
@@ -185,6 +188,7 @@ process bwa_aligner_single {
     fq_pfx = fq_file.simpleName
     assay = fq_pfx.split("__")[1]
     antibody = fq_pfx.split("__")[2]
+    sample = fq_pfx.split("__")[3]
     // alignment_id = "${sequence_id}_${fq_pfx}"
     aln_bam = "${fq_pfx}.bam"
     trim_report = "${fq_pfx}.trim_report.txt"
@@ -204,6 +208,7 @@ process bwa_aligner_single {
     fq_pfx = fq_file.simpleName
     assay = fq_pfx.split("__")[1]
     antibody = fq_pfx.split("__")[2]
+    sample = fq_pfx.split("__")[3]
     // alignment_id = "${sequence_id}_${fq_pfx}"
     aln_bam = "${fq_pfx}.bam"
     trim_report = "${fq_pfx}.trim_report.txt"

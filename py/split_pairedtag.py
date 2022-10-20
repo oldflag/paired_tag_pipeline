@@ -108,7 +108,8 @@ def build_sample_fq_map(manifest_f, assay_ids, this_seq_id):
     for aid in assay_ids:
         rec = records[aid]
         sid, ab = rec['sequence_id'], rec['antibody_name']
-        fqf = f'{sid}__{aid}__{ab}__1.fq.gz'
+        smid = rec['sample_id']
+        fqf = f'{sid}__{aid}__{ab}__{smid}__1.fq.gz'
         fqs[aid] = fqf
     return fqs
 
@@ -125,7 +126,7 @@ def main(args):
     sample_fq_map = build_sample_fq_map(args.sample_manifest, list(sample_seqmap.values()), args.sequence_id)
     handle_map = {sm: xopen(base + fq, 'wt')
                   for sm, fq in sample_fq_map.items()}
-    handle_map['*'] = xopen(base + '%sUNK__UNK__UNK_unmatched.fq.gz' % args.library_id, 'wt')
+    handle_map['*'] = xopen(base + '%sUNK__UNK__UNK__UNK_unmatched.fq.gz' % args.library_id, 'wt')
 
     if args.threads <= 1:
         chunk_iter = map(annotate_reads_, annot_args)

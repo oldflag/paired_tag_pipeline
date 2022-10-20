@@ -64,12 +64,12 @@ class TrackWindow(object):
         self.done_ = False
 
     def query(self, loc):
-        if loc is None or loc[1] is -1 or loc[0] not in self.refs:
+        if loc is None or loc[1] == -1 or loc[0] not in self.refs:
             return []
         if self.done_ and len(self.window) == 0:
             return []
         if len(self.window) > 20 or self.done_:
-            self.window = [iv for iv in self.window if iv[1] is not -1 and not is_before(iv, loc, self.refs)]  # filter
+            self.window = [iv for iv in self.window if iv[1] != -1 and not is_before(iv, loc, self.refs)]  # filter
         while len(self.window) == 0 or not is_after(self.window[-1], loc, self.refs):
             try:
                 self.window.append(next(self.track_iter))
@@ -112,6 +112,7 @@ def get_args():
     parser.add_argument('out', help='the output bam file')
     parser.add_argument('--library', help='The library name', default='')
     parser.add_argument('--antibody', help='The antibody name', default='')
+    parser.add_argument('--assay_id', help='The assay id', default=None)
     parser.add_argument('--sample_id', help='The sample id', default=None)
     parser.add_argument('--track', help='A track to use, format: <filepath>:<tag>:<fmt>; can specify multiple times',
                         action='append')
@@ -121,7 +122,7 @@ def get_args():
 
 def main(args):
     print(args)
-    if args.sample_id is None:
+    if args.assay_id is None:
         handle = pysam.AlignmentFile(args.bam)
         sample_ids = Counter(
           (x.query_name.split('|')[2].split(':')[-2],
@@ -138,22 +139,35 @@ def main(args):
 
         sample_ids = {k: v[0] for k, v in best.items()}
     else:
-        sample_ids = {'USER_SPEC': args.sample_id}
+        sample_ids = {'USER_SPEC': args.assay_id}
 
+    print('Opening')
     handle = pysam.AlignmentFile(args.bam)
+    print('Loading header')
     header_dct = handle.header.as_dict()
 
-    rgpfx = args.bam[:-len('.bam')] if args.sample_id is None else args.library + '___' + args.antibody + '__' + args.sample_id
+    suffix = None
+    if args.assay_id is not None:
+        suffix = args.assay_id
+    if args.sample_id is not None:
+        if suffix:
+            suffix += '__' + args.sample_id
+            sample_ids = {args.sample_id: args.assay_id}
+        else:
+            suffix = '__' + args.sample_id
+
+    rgpfx = args.bam[:-len('.bam')] if suffix is None else args.library + '__' + args.antibody + '__' + suffix
     header_dct['RG'] = [
-      {'ID': f'{rgpfx}_{i}',
+      {'ID': f'{rgpfx}__{i}',
        'PL': 'ILLUMINA',
        'SM': sm,
        'BC': sq, # the BC is not written by pysam even though it's a fine 'alternate' info - add to PU
        'PU': sq} 
       for i, (sm, sq) in enumerate(sample_ids.items())
     ]
+    print('Header written')
 
-    sam2rg = {e['SM']: e['ID'] for e in header_dct['RG']} if args.sample_id is None else {args.sample_id: f'{rgpfx}_0'}
+    sam2rg = {e['SM']: e['ID'] for e in header_dct['RG']} if args.assay_id is None else {args.assay_id: f'{rgpfx}_0'}
     if args.track is not None and len(args.track) > 0:
         track_info = [x.split(':') for x in args.track]  # format :: --track /path/to/file.saf:XT:SAF
         tracks = TrackOracle(handle.references, tracks=track_info)
@@ -162,6 +176,7 @@ def main(args):
 
     outfile = pysam.AlignmentFile(args.out, mode='wb', header=header_dct)
     for i, read in enumerate(handle):
+        print(i)
         outfile.write(transform_read(read, i, sam2rg, args.library, args.antibody, tracks=tracks))
     outfile.close()
 

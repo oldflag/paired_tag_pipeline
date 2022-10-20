@@ -169,7 +169,9 @@ def normalize_jaccard_snapatac2(Jm, Em, nadj=500, winsor=99.0):
 
     """
     k = Jm.shape[0]
-    ix = np.random.choice(int(k*(k-1)/2), nadj, replace=False)
+    s_tri = int(k*(k-1)/2)
+    sel = nadj if nadj < s_tri else s_tri
+    ix = np.random.choice(sel, nadj, replace=False)
     # fit the polynomial model
     poly = np.polyfit(
         Em[lower_tri_sub(k, ix)],
@@ -521,6 +523,10 @@ def cluster_antibody_dna(dat_dna, antibody, n_pcs=15, drop_first=1, min_bins=300
     if PDF:
         plt.savefig(PDF, format='pdf', dpi=250)
         plt.close()
+
+    if dat_dna.shape[0] < 100:
+        print('Too few cells to cluster; skipping')
+        return dat_dna
 
     dat_dna.obsp['jaccard'] = jaccard_diagnostics(dat_dna, n_approx=1000, title=antibody)
     dat_dna = do_dna_cluster_(dat_dna, n_pcs, drop_first, plot_title=antibody,

@@ -42,7 +42,13 @@ process parse_pairedtag_r2 {
 
 
 /*
- * Parse R2, annotate R1, and split in a single process
+ * Parse R2, annotate R1, and split in a single process.
+ *
+ * A single sub-library for Paired-Tag (R1.fq R2.fq) will be
+ * split into the individual assays (typically 12 tubes, so
+ * 12 annotated fq files).
+ *
+ *
  * * Config-defined parameters
  * ---------------------------
  *  + py_dir: path to the root python directory of the 'pipelines' repo
@@ -61,20 +67,25 @@ process process_pairedtag {
   output:
     val sequence_id
     file 'out/*.fq.gz'
+    file sequence_logo
 
   script:
+    sequence_logo="${sequence_id}.logo.pdf"
     """
     mkdir -p out
+    python "${params.py_dir}/pull_linkers.py" "${r2_fastq}" "${sequence_logo}"
     python "${params.py_dir}/split_pairedtag.py" "${r1_fastq}" "${r2_fastq}" "${params.combin_barcodes}" "${params.sample_barcodes}" "${params.linker_file}" ./out/ --library_id "${library_id}" --threads "${params.r2_parse_threads}" --sequence_id "${sequence_id}" --umi_size "${params.umi_len}"
     """
 
   stub:
+    sequence_logo="${sequence_id}.logo.pdf"
     """
     mkdir -p out
-    touch "out/${sequence_id}__assay01__ab01__1.fq.gz"
-    touch "out/${sequence_id}__assay02__ab01__2.fq.gz"
-    touch "out/${sequence_id}__assay01__ab01__3.fq.gz"
-    touch "out/${sequence_id}__assay02__ab02__4.fq.gz"
+    touch "${sequence_logo}"
+    touch "out/${sequence_id}__assay01__ab01__sampleX__1.fq.gz"
+    touch "out/${sequence_id}__assay02__ab01__sampleY__2.fq.gz"
+    touch "out/${sequence_id}__assay01__ab01__sampleX__3.fq.gz"
+    touch "out/${sequence_id}__assay02__ab02__sampleY__4.fq.gz"
     """
 }
 
@@ -174,8 +185,8 @@ process add_tags {
     tuple val(alignment_id), file(annot_bam_file), val(seqtype), val(assay_id), val(antibody)
 
   script:
-    unsorted_bam = bam_file.simpleName - '.bam' + '_tag_uns.bam'
     annot_bam_file = bam_file.simpleName - '.bam' + '_tag.bam'
+    sample_id=bam_file.simpleName.split('__')[3]
     """
     strip () {
         echo "\${1%%.*}"
@@ -201,15 +212,12 @@ process add_tags {
     if [  \$(strip "${annot6_file}") != "input" ]; then
         tag_args="\${tag_args} --track ${annot6_file}:${annot6_tag}:${annot6_fmt}"
     fi
-    mkfifo "intermediate.bam"
-    samtools sort "${bam_file}" -o "intermediate.bam" &
 
     if [ "\${tag_args}" == "" ]; then
-        python "${params.py_dir}"/add_tags.py intermediate.bam "${annot_bam_file}" --library "${alignment_id}" --antibody "${antibody}" --sample_id "${assay_id}"
+        python "${params.py_dir}"/add_tags.py "${bam_file}" "${annot_bam_file}" --library "${alignment_id}" --antibody "${antibody}" --assay_id "${assay_id}" --sample_id "${sample_id}"
     else
-        python "${params.py_dir}"/add_tags.py intermediate.bam "${annot_bam_file}" --library "${alignment_id}" --antibody "${antibody}" --sample_id "${assay_id}" \$tag_args
+        python "${params.py_dir}"/add_tags.py "${bam_file}" "${annot_bam_file}" --library "${alignment_id}" --antibody "${antibody}" --assay_id "${assay_id}" --sample_id "${sample_id}" \$tag_args
     fi
-    rm intermediate.bam 
     """
 
   stub:
