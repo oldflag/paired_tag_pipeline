@@ -8,30 +8,38 @@ import gzip
 
 def get_args():
     parser = ArgumentParser()
-    parser.add_argument('barcode_csv', help='The barcode csv.gz file')
-    parser.add_argument('output_pdf', help='The output qc pdf')
+    parser.add_argument('annot_fq', help='The annotated fastq file', nargs='+')
+    parser.add_argument('--output_pdf', help='The output qc pdf', default=None)
     parser.add_argument('--plate_layout', help='The plate layout csv file', default='/home/chartl/repos/pipelines/config/plate_layout.csv')
 
     return parser.parse_args()
 
 
 def main(args):
-    libname = args.barcode_csv.split('.csv')[0].split('/')[-1]
+    libname = args.annot_fq[1].split('.fq')[0].split('/')[-1].split('__')[0]
+    if args.output_pdf is None:
+        outpdf = libname + '.barcode_qc.pdf'
+    else:
+        outpdf = args.output_pdf
+
     def title(ttl):
         plt.title(ttl + '\nLibrary: %s' % libname)
 
-    hdl = gzip.open(args.barcode_csv, 'rt')
     counts = dict()
-    for line in hdl:
-        vals = line.strip().split(',')[1].split(':')
-        if vals[0] == '*':
-            key = ('*', '*')
-        elif '*' in vals[1] or '*' in vals[2]:
-            key = (vals[3], '*')
-        else:
-            key = (vals[3], vals[1] + '.' + vals[2])
-        counts[key] = 1 + counts.get(key, 0)
-    hdl.close()
+    for fastq in args.annot_fq:
+        hdl = gzip.open(fastq, 'rt')
+        for line in hdl:
+            if line[0] != '@':
+                continue
+            vals = line.strip().split('|')[1].split(':')
+            if vals[0] == '*':
+                key = ('*', '*')
+            elif '*' in vals[1] or '*' in vals[2]:
+                key = (vals[3], '*')
+            else:
+                key = (vals[3], vals[1] + '.' + vals[2])
+            counts[key] = 1 + counts.get(key, 0)
+        hdl.close()
 
     records = pd.DataFrame([{
        'sample': k[0],
@@ -70,7 +78,7 @@ def main(args):
     str_U = 'unassigned (%.1f%%)' % (100 * r_unassign)
     records.loc[:, 'assignment'] = records.sample_cell.map(lambda x: str_U if '*' in x else str_A)
     acounts = records.groupby('assignment')['reads'].sum().reset_index()
-    pdf = PdfPages(args.output_pdf)
+    pdf = PdfPages(outpdf)
     plt.bar(acounts.assignment, acounts.reads)
     plt.ticklabel_format(axis='y', style='plain')
 

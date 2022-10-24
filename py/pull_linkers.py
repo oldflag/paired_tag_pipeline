@@ -39,9 +39,13 @@ def s2c(s):
 def main(args):
     reads = read_fastq(args.fastq)
     PWM = np.zeros((len(lseq), 4), dtype=np.float32)
-    for read in reads:
+    for i, read in enumerate(reads):
+        if i < 1000:
+            continue
         bs = find_best_seq(read.seq)
         PWM += s2c(bs)
+        if i > 7001000:
+            break
     PWM = PWM/np.sum(PWM[0,:])
     # transform to information content
     ICM = 2 + np.nansum(PWM * np.log2(PWM), axis=1)

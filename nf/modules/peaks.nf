@@ -63,7 +63,7 @@ process MACS2_peakcall {
 /*
  * As MACS2_peakcall, but for multiple input bam files to avoid pre-merging.
  * Expects something like
- * MACS2_multi(baminfo.map{it -> tuple(it[1].collect(), params.RUN_NAME, it[0])})
+ * MACS2_multi(baminfo.map{it -> tuple(it[0], it[1].collect(), params.RUN_NAME)})
  */
 process MACS2_multi {
   conda params.HOME_REPO + '/nf/envs/macs2.yaml'

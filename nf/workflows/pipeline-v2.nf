@@ -90,8 +90,8 @@ if ( params.SPECIES == "hs" ) {
     params.genome_saf_file = file("/home/share/storages/2T/genome/mouse/gencode.vM28.annotation.saf")
     params.genome_gtf_collapsed_file = file("/home/share/storages/2T/genome/mouse/gencode.vM28.annotation.collapsed.gtf") 
     params.heterochromatin_saf_file = file("/home/share/storages/2T/genome/mouse/20220603-mm39-brain-heterochromatin.saf")
-    params.enhancer_saf_file = file("/home/share/storages/2T/genome/mouse/20220603-mm39-brain-enhancer-map-annotated.saf")
-    params.promoter_saf_file = file("/home/share/storages/2T/genome/mouse/20220603-mm39-brain-promoter-annotated.saf")
+    params.enhancer_saf_file = file("/home/share/storages/2T/genome/mouse/old_annots/GRCm39_Encode_Enhancers.saf")
+    params.promoter_saf_file = file("/home/share/storages/2T/genome/mouse/old_annots/GRCm39_Encode_Promoters.saf")
     params.count_ncores = 3
     params.macs_genome_type = "mm"    
 }    
@@ -100,6 +100,7 @@ if ( params.SPECIES == "hs" ) {
 // modules
 include { trim_fq_single as trim_rna; trim_fq_single as trim_dna} from params.HOME_REPO + "/nf/modules/trim"
 include { process_pairedtag; 
+          barcode_qc as barcode_qc;
           add_tags as tag_rna; 
           add_tags as tag_dna } from params.HOME_REPO + "/nf/modules/pairedtag_reads"
 include { star_aligner_single; bwa_aligner_single
@@ -150,6 +151,10 @@ workflow {
   fqjoin = fastq_ids.join(fastq_subfiles).map{ it -> tuple(it[1], it[2])}
   fqjoin = fqjoin.join(type_ch).map{ it -> tuple(it[0], it[2], it[1])}
   fqjoin = fqjoin.transpose()
+   // this is now a tuple of (seq_id, seq_type, fastq)
+  fqjoin.map{it -> tuple(it[0], it[2])}.groupTuple().subscribe{println it}
+  barcode_pdfs = barcode_qc(fqjoin.map{ it -> tuple(it[0], it[2]) }.groupTuple())
+  publishbarcodeqc(barcode_pdfs)
    
 
   rna_fq = fqjoin.filter{ it[1] =~ /rna/ }.map{it -> tuple(it[0], it[2], it[1])}
