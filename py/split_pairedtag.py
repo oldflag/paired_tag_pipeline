@@ -11,6 +11,9 @@ from itertools import islice
 from multiprocessing import Pool
 from utils import read_fasta, read_fastq, dxopen as xopen, fastq_record
 from csv import DictReader
+import os
+import subprocess
+import io
 
 
 def get_args():
@@ -124,9 +127,13 @@ def main(args):
 
     base = args.outdir + '/'
     sample_fq_map = build_sample_fq_map(args.sample_manifest, list(sample_seqmap.values()), args.sequence_id)
-    handle_map = {sm: xopen(base + fq, 'wt')
-                  for sm, fq in sample_fq_map.items()}
-    handle_map['*'] = xopen(base + '%sUNK__UNK__UNK__UNK_unmatched.fq' % args.library_id, 'wt')
+    sample_fq_map['*'] = '%s_UNK__UNK__UNK__UNK_unmatched__1.fq' % args.library_id
+    handle_map, gz_procs = dict(), list()
+    for sm, fq in sample_fq_map.items():
+        os.mkfifo(fq)
+        p = subprocess.Popen('cat %s | gzip -c > %s/%s.gz' % (fq, base, fq), shell=True)
+        gz_procs.append(p)
+        handle_map[sm] = io.open(fq, 'wt')
 
     from contextlib import closing
     with closing(Pool(args.threads, maxtasksperchild=1)) as pool:
@@ -137,9 +144,9 @@ def main(args):
                 handle_map[sample_id].write(record.seq + '\n')
                 handle_map[sample_id].write('+\n')
                 handle_map[sample_id].write(record.qual + '\n')
-            for s_id, hdl in handle_map.items():
-                hdl.flush()
 
+    for proc in gz_procs:
+        _ = proc.communicate()
 
     for sample_id, handle in handle_map.items():
         handle.close()

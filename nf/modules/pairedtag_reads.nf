@@ -73,12 +73,13 @@ process process_pairedtag {
     sequence_logo="${sequence_id}.logo.pdf"
     """
     mkdir -p out
-    python "${params.py_dir}/pull_linkers.py" "${r2_fastq}" "${sequence_logo}"
+    #python "${params.py_dir}/pull_linkers.py" "${r2_fastq}" "${sequence_logo}"
+    touch "${sequence_logo}"
     python "${params.py_dir}/split_pairedtag.py" "${r1_fastq}" "${r2_fastq}" "${params.combin_barcodes}" "${params.sample_barcodes}" "${params.linker_file}" ./out/ --library_id "${library_id}" --threads "${params.r2_parse_threads}" --sequence_id "${sequence_id}" --umi_size "${params.umi_len}"
-    for fqf in `ls out`; do
-        gzip "out/\${fqf}" &
-    done
-    wait 
+    #for fqf in `ls out`; do
+    #    gzip "out/\${fqf}" &
+    #done
+    #wait 
     """
 
   stub:
