@@ -109,7 +109,7 @@ def build_sample_fq_map(manifest_f, assay_ids, this_seq_id):
         rec = records[aid]
         sid, ab = rec['sequence_id'], rec['antibody_name']
         smid = rec['sample_id']
-        fqf = f'{sid}__{aid}__{ab}__{smid}__1.fq.gz'
+        fqf = f'{sid}__{aid}__{ab}__{smid}__1.fq'
         fqs[aid] = fqf
     return fqs
 
@@ -126,23 +126,20 @@ def main(args):
     sample_fq_map = build_sample_fq_map(args.sample_manifest, list(sample_seqmap.values()), args.sequence_id)
     handle_map = {sm: xopen(base + fq, 'wt')
                   for sm, fq in sample_fq_map.items()}
-    handle_map['*'] = xopen(base + '%sUNK__UNK__UNK__UNK_unmatched.fq.gz' % args.library_id, 'wt')
+    handle_map['*'] = xopen(base + '%sUNK__UNK__UNK__UNK_unmatched.fq' % args.library_id, 'wt')
 
-    if args.threads <= 1:
-        chunk_iter = map(annotate_reads_, annot_args)
-    else:
-        pool = Pool(args.threads)
-        chunk_iter = pool.imap(annotate_reads_, annot_args)
+    from contextlib import closing
+    with closing(Pool(args.threads, maxtasksperchild=1)) as pool:
+        chunk_iter = pool.imap_unordered(annotate_reads_, annot_args)
+        for i, read_chunk in enumerate(chunk_iter):
+            for sample_id, record in read_chunk:
+                handle_map[sample_id].write('@' + record.name + '\n')
+                handle_map[sample_id].write(record.seq + '\n')
+                handle_map[sample_id].write('+\n')
+                handle_map[sample_id].write(record.qual + '\n')
+            for s_id, hdl in handle_map.items():
+                hdl.flush()
 
-    for i, read_chunk in enumerate(chunk_iter):
-        for sample_id, record in read_chunk:
-            handle_map[sample_id].write('@' + record.name + '\n')
-            handle_map[sample_id].write(record.seq + '\n')
-            handle_map[sample_id].write('+\n')
-            handle_map[sample_id].write(record.qual + '\n')
-
-    if args.threads > 1:
-        pool.close()
 
     for sample_id, handle in handle_map.items():
         handle.close()
