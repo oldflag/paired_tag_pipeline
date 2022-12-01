@@ -125,6 +125,41 @@ process umitools_count {
       """
 }
 
+/*
+ * This process defines a simple counting procedure for use
+ * on e.g., bulk data
+ */
+process simple_feature_count {
+  conda params.HOME_REPO + '/nf/envs/featurecounts.yaml'
+  input:
+    tuple val(sequence_id), file(bam_file)
+    tuple file(annotation_file), val(annotation_type)
+
+  output:
+    tuple val(sequence_id), file(count_file)
+    file fc_log
+
+  script:
+    count_file = "${sequence_id}_count.txt"
+    fc_log = "${sequence_id}_count.log"
+    """
+    mkdir -p fc_out
+    featureCounts -F "${annotation_type}" \
+      -O -Q 30 \
+      -T "${params.count_ncores}" \
+      --verbose --Rpath fc_out \
+      -a "${annotation_file}" -o "${count_file}" \
+      "${bam_file}" 2>&1 > "${fc_log}"
+
+      """
+
+    stub:
+      count_file = "${sequence_id}_count.txt"
+      fc_log = "${sequence_id}_count.log"
+      """
+      touch "${count_file}" "${fc_log}"
+      """
+}
 
 process annotate_multiple_features {
   // conda params.HOME_REPO + '/nf/envs/featurecounts.yaml'
@@ -136,14 +171,15 @@ process annotate_multiple_features {
 
   output:
     tuple val(sequence_id), file(merged_bam), val(seqtype), val(assay_id), val(antibody)
+    tuple val(sequence_id), file(count_file1), file(count_file2)
     tuple file(fc_log), file(merge_log)
 
   script:
     bamname = bam_file.simpleName
-    count_file1 = bamname - '.bam' + '.fc_count1.txt'
     annot_bam1 = bamname - '.bam' + '_annot1.bam'
-    count_file2 = bamname - '.bam' + '.fc_count2.txt'
     annot_bam2 = bamname - '.bam' + '_annot2.bam'
+    count_file1 = bamname - '.bam' + '.fc_count.' + destination_tag1 + '.txt'
+    count_file2 = bamname - '.bam' + '.fc_count.' + destination_tag2 + '.txt'
     fc_log = bamname - '.bam' + '_multi_annot.log'
     merge_log = bamname - '.bam' + '_tag_merge.log'
     merged_bam = bamname - '.bam' + '_multiAnnot.bam'
@@ -187,15 +223,17 @@ process annotate_multiple_features {
 
   stub:
     bamname = bam_file.simpleName
-    count_file1 = bamname - '.bam' + '.fc_count1.txt'
     annot_bam1 = bamname - '.bam' + '_annot1.bam'
-    count_file2 = bamname - '.bam' + '.fc_count2.txt'
     annot_bam2 = bamname - '.bam' + '_annot2.bam'
+    count_file1 = bamname - '.bam' + '.fc_count.' + destination_tag1 + '.txt'
+    count_file2 = bamname - '.bam' + '.fc_count.' + destination_tag2 + '.txt'
     fc_log = bamname - '.bam' + '_multi_annot.log'
     merge_log = bamname - '.bam' + '_tag_merge.log'
     merged_bam = bamname - '.bam' + '_multiAnnot.bam'
 
     """
+    touch "${count_file1}"
+    touch "${count_file2}"
     touch "${merged_bam}"
     touch "${fc_log}"
     touch "${merge_log}"
@@ -222,8 +260,8 @@ process merge_counts {
       file HOME_REPO
 
   output:
-      file(merged_count_h5ad)
-      file(merged_count)
+      file merged_count_h5ad
+      file merged_count
 
   script:
       merged_count_h5ad = "${file_header}"+'_merged.h5ad'
@@ -244,6 +282,38 @@ process merge_counts {
       touch "${merged_count_h5ad}"
       touch "${merged_count}"
       """
+}
+
+/*
+ * This module defines a process to convert a scanpy-formatted h5ad
+ * file (/X /obs /var); into a 10x-formatted h5ad file (/matrix
+ * /matrix/barcodes etc) that is compliant with Signac
+ *
+ * Config-defined parameters:
+ * --------------------------
+ *   + HOME_REPO : the path to the home repository
+ */
+process scanpy_to_signac {
+  conda params.HOME_REPO + '/nf/envs/seurat.yaml'
+
+  input:
+    file dna_h5ad
+    val genome_name
+
+  output:
+    file dna_10x
+
+  script:
+    dna_10x = (dna_h5ad.toString() - '.h5ad' + '_10x_format.h5')
+    """
+    Rscript $params.HOME_REPO/R/scanpy_to_10x.R $dna_h5ad $dna_10x $genome_name
+    """
+
+  stub:
+    dna_10x = (dna_h5ad.toString() - '.h5ad' + '_10x_format.h5')
+    """
+    touch $dna_10x
+    """
 }
 
 /*

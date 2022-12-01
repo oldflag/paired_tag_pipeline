@@ -183,4 +183,72 @@ process merge_chip_qc {
     touch "${chipseq_plots}" "${chipseq_merged_sample}" "${chipseq_merged_cell}"
     """
 }
+ 
+/*
+ * This module defines a process that, given per-antibody bam files and
+ * an output base name, provides a set of peak plots across particular
+ * regions of interest.
+ * 
+ * Config-defined parameters
+ * -----------------------------
+ * HOME_REPO - location of the repository
+ */
+process plot_peaks_in_regions {
+  conda params.HOME_REPO + "/nf/env/samplot.yaml"
+
+  input:
+    file antibody_bams  // .collect() has been run
+    file antibody_peaks // .collect() has been run
+    val antibody_names // .collect() has been run
+    file regions_of_interest
+    file genome_gff_gz
+    file genome_gff_tbi
+    file enhancer_bed_gz
+    file enhancer_bed_tbi
+    val run_name
+
+  output:
+    file './*.png'
+
+  script:
+    peak_gz = antibody_peaks.map({ it.toString() + '.gz'})
+    """
+    # gzip the peak files
+    bgzip ${antibody_peaks}
+    # tabix them
+    for bgp in `ls *.bed.gz`; do
+      tabix \$bgp
+    done
+
+    # index the bam files
+    for bf in `ls *.bam`; do
+      samtools index \$bf
+    done
+
+    while read line; do
+      echo \$line
+      chr=\$(echo \$line | awk '{print \$1}')
+      str=\$(echo \$line | awk '{print \$2}')
+      end=\$(echo \$line | awk '{print \$3}')
+      gn=\$(echo \$line | awk '{print \$4}')
+    
+      samplot plot -n ${antibody_names} \
+        -b ${antibody_bams} \
+        -c \$chr \
+        -s \$str \
+        -e \$end \
+        -A ${peak_gz} \${enhancer_bed_gz} \
+        -T "${genome_gff_gz}" \ 
+        -o "${run_name}_\${gn}.png"
+    done < regions_of_interest.bed
+    """
   
+  stub:
+    """
+    while read line; do
+      echo \$line
+      gn=\$(echo \$line | awk '{print \$3}')
+      touch "${run_name}_\${gn}.png"
+    done
+    """
+}

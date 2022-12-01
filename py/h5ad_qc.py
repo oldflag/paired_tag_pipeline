@@ -107,6 +107,23 @@ def main(args):
         plt.ylabel('RNA UMI (each cell)');
         plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250)
 
+        dat.loc[:, 'dna_complexity'] = dat.dna_umis / dat.dna_reads
+        dat.loc[:, 'rna_complexity'] = dat.rna_umis / dat.rna_reads
+        plt.figure(figsize=(8,6))
+        
+        for lib in dat.library_id.unique():
+            ddf = dat[dat.library_id == lib]
+            ddf = ddf[(ddf.dna_umis >= 500) & (ddf.rna_umis >= 500)]
+            if ddf.shape[0] > 0:
+                plt.scatter(ddf.rna_complexity, ddf.dna_complexity, marker='.', label=lib, rasterized=True)
+        
+        plt.legend(bbox_to_anchor=(1,1))
+        plt.tight_layout()
+        plt.xlabel('RNA Complexity (UMI per read; per cell)')
+        plt.ylabel('DNA Complexity (UMI per read; per cell)');
+        plt.title('Library Complexity per cell\n(500 UMI minimum per cell)');yxline();
+        plt.tight_layout();plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250)
+
         plt.figure(figsize=(12,12))
         for lib in dat.library_id.unique():
             ddf = dat[dat.library_id == lib]
@@ -137,6 +154,22 @@ def main(args):
         yxline(min_=5e-8);
         plt.xscale('log');plt.yscale('log')
         plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250)
+        
+        covered_both = dat[(dat.rna_umis >= 500) & (dat.dna_umis >=500)].groupby('library_id')['rna_umis'].count().reset_index()
+        covered_both.columns = ['library', 'n_cells']
+        covered_both.loc[:, 'assay'] = 'dna+rna'
+        covered_rna = dat[(dat.rna_umis >=500)].groupby('library_id')['rna_umis'].count().reset_index()
+        covered_rna.columns = ['library', 'n_cells']
+        covered_rna.loc[:, 'assay'] = 'rna'
+        covered_dna = dat[(dat.dna_umis >= 500)].groupby('library_id')['dna_umis'].count().reset_index()
+        covered_dna.columns = ['library', 'n_cells']
+        covered_dna.loc[:, 'assay'] = 'dna'
+        
+        ddf = pd.concat([covered_rna, covered_dna, covered_both])
+        plt.figure(figsize=(12,8))
+        sbn.barplot(x='library', y='n_cells', hue='assay', data=ddf)
+        plt.xticks(rotation=90);plt.xlabel('Number of covered cells');plt.ylabel('Library')
+        plt.tight_layout();plt.gca().set_rasterized(True);plt.savefig(pdf, format='pdf', dpi=250)
                 
 
 

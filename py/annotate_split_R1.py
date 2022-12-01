@@ -32,7 +32,7 @@ def get_args():
     parser.add_argument('bc_csv', help='The barcode CSV parsed from Read 2')
     parser.add_argument('well_bc', help='The well barcode file (fasta)')
     parser.add_argument('sample_manifest', help='The sample manifest file, containing sample id, barcode, and antibody')
-    parser.add_argument('--cells_per_fastq', help='The target # cells / fastQ for output', default=10000, type=int)
+    parser.add_argument('--cells_per_fastq', help='The target # cells / fastQ for output', default=25000, type=int)
     parser.add_argument('--noestimate', help='Do not estimate total # of cells; compute exact numbers', action='store_true')
     parser.add_argument('--sequence_id', help='The sequence id. Defaults to the {this_thing}_R1.fastq.gz', default=None)
     parser.add_argument('--outdir', help='The output directory', default=None)

@@ -56,6 +56,48 @@ process star_aligner_single {
     """
 }
 
+process basic_bwa {
+  conda params.HOME_REPO + '/nf/envs/bwa.yaml'
+
+  input
+    tuple val(sequence_id), file(fq1), file(fq2), file(fq3)
+
+  output:
+    tuple val(sequence_id), file(bam)
+
+  script:
+    bam="${sequence_id}.bam"
+    int_bam="${sequence_id}.uns.bam"
+    """
+    if [ "${fq2}" == "null" ]; then
+        bwa mem -R "@RG\tID:${sequence_id}.RG\tSM:${sequence_id}\tPL:UNK\tPU:UNK}" \
+                -t $params.alignment_ncore -k 17 $params.genome_reference $fq1 | samtools view -hb > ${int_bam}
+    elif [ "${fq3}" == "null" ]; then
+        bwa mem -R "@RG\tID:${sequence_id}.RG\tSM:${sequence_id}\tPL:UNK\tPU:UNK" \
+                -t $params.alignment_ncore -k 17 $params.genome_reference $fq1 $fq2 | samtools view -hb > ${int_bam}
+    else
+        bwa mem -R "@RG\tID:${sequence_id}.RG\tSM:${sequence_id}\tPL:UNK\tPU:UNK" \
+                -t $params.alignment_ncore -k 17 $params.genome_reference $fq1 $fq2 | samtools view -hb > ${sequence_id}.p.bam
+
+        bwa mem -R "@RG\tID:${sequence_id}.RG\tSM:${sequence_id}\tPL:UNK\tPU:UNK" \
+                -t $params.alignment_ncore -k 17 $params.genome_reference $fq3 | samtools view -hb > ${sequence_id}.w.bam
+
+        samtools merge -o $int_bam ${sequence_id}.p.bam ${sequence_id}.w.bam
+    fi
+        
+
+    samtools sort -@ $params.alignment_ncore "${int_bam}" -o "${bam}"
+    """
+
+   stub:
+    bam="${sequence_id}.bam"
+    int_bam="${sequence_id}.uns.bam"
+    """
+    touch $bam
+    """ 
+
+ } 
+
 
 /*
  * This process defines a mechanism for aligning genomic dna
@@ -210,3 +252,79 @@ process merge_alignment_qc {
     touch "${merged_file}"
     """
 } 
+
+/*
+ * This process converts a .bam file into a Signac-compatible
+ * fragments file, ensures that it is sorted, block-compresses
+ * and indexes the fragments file.
+ *
+ * Config-defined parameters
+ * --------------------------
+ * HOME_REPO - the path to the home repository
+ * fragment_ncore - the number of cores to use
+ */
+process bam_to_frag {
+  conda params.HOME_REPO + '/nf/envs/bamtofrag.yaml'
+  input:
+    file bam_file
+
+  output:
+    file fragment_file
+    file fragment_index
+
+  script:
+    fragment_file = (bam_file.toString() - '.bam') + '.frag.tsv.gz'
+    fragment_index = fragment_file + '.tbi'
+    """
+    samtools index $bam_file
+    python $params.HOME_REPO/py/bam2frag.py $bam_file $fragment_file --ncores $params.fragment_ncore
+    zcat $fragment_file | bedtools sort -i /dev/stdin | bgzip -c > ${fragment_file}.tmp
+    mv ${fragment_file}.tmp ${fragment_file}
+    tabix -p bed $fragment_file
+    """
+
+   stub:
+     fragment_file = (bam_file.toString() - '.bam') + '.frag.tsv.gz'
+     fragment_index = fragment_file + '.tbi'
+     """
+     touch $fragment_file $fragment_index
+     """
+}
+
+
+/*
+ * This process merges multiple fragment files
+ *
+ * Config-defined parameters
+ * ------------
+ * HOME_REPO - the path to the home repository
+ */
+process merge_frag_files {
+  conda $params.HOME_REPO + '/nf/envs/bamtofrag.yaml'
+
+  input:
+    file fragment_file  // .collect() has been run
+    val run_name
+
+  output:
+    file merged_fragments
+    file merged_fragments_index
+
+  script:
+    merged_fragments = run_name + '_fragments_allAntibodies.tsv.gz'
+    merged_fragments_idnex = merged_fragments + '.tbi'
+    """
+    zcat $fragment_file | bedtools sort - /dev/stin | bgzip -c > ${merged_fragments}
+    tabix -p bed ${merged_fragments}
+    """
+
+  stub:
+    merged_fragments = run_name + '_fragments_allAntibodies.tsv.gz'
+    merged_fragments_idnex = merged_fragments + '.tbi'
+    """
+    touch $merged_fragments
+    touch $merged_fragments_index
+    """
+}
+  
+   
