@@ -55,6 +55,8 @@ params.SAMPLE_DIGEST = file(params.SAMPLE_DIGEST_FILE)
 // parameters of R1 trimming
 params.trim_ncores = 2
 params.adapter_seq = "CTGTCTCTTATA"  // nextera
+params.universal_seq = "AGATCGGAAGAG"
+params.transposase_seq = "TCGTCGGCAGCGTCAGATGTGTATAAGAGACAG"
 params.trim_qual = 20
 
 // parameters of R2 parsing
@@ -132,15 +134,15 @@ include { publishData as publishdnabam; publishData as publishrnabam;
           publishData as publish10xdna } from params.HOME_REPO + "/nf/modules/publish" 
 
 /* channel over rows of the digest */
-pair_ch = Channel.fromPath(params.LIBRARY_DIGEST).splitCsv(header: true, sep: ",").map{ row -> tuple(row.sequence_id, file(row.fastq1), file(row.fastq2), row.library_id, row.library_type)}
+pair_ch = Channel.fromPath(params.LIBRARY_DIGEST).splitCsv(header: true, sep: ",").map{ row -> tuple(row.sequence_id, file(row.fastq1), file(row.fastq2), row.lysis_id, row.library_type)}
 type_ch = Channel.fromPath(params.LIBRARY_DIGEST).splitCsv(header:true, sep: ",").map{ row -> tuple(row.sequence_id, row.library_type) }
-
 
 def inner_join(ch_a, ch_b) {
     return ch_b.cross(ch_a).map { [it[0][0], *it[1][1..-1], *it[0][1..-1]] }
 }
 
 workflow {
+  // # note: params.SAMPLE_DIGEST is used implicitly here
   split_fqs = process_pairedtag(pair_ch.map{ it -> tuple(it[0], it[1], it[2], it[3])})
   publishlogo(split_fqs[2])
   i=0
@@ -152,7 +154,7 @@ workflow {
   fqjoin = fqjoin.join(type_ch).map{ it -> tuple(it[0], it[2], it[1])}
   fqjoin = fqjoin.transpose()
    // this is now a tuple of (seq_id, seq_type, fastq)
-  fqjoin.map{it -> tuple(it[0], it[2])}.groupTuple().subscribe{println it}
+  //fqjoin.map{it -> tuple(it[0], it[2])}.groupTuple().subscribe{println it}
   barcode_pdfs = barcode_qc(fqjoin.map{ it -> tuple(it[0], it[2]) }.groupTuple())
   publishbarcodeqc(barcode_pdfs)
    

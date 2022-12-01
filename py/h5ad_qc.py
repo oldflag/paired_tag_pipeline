@@ -62,17 +62,17 @@ def main(args):
 
     del dna_mg_df, dat_dna_umi
 
-    library_sizes = dat_mg.groupby(['library_id'])[['dna_reads', 'dna_umis', 'rna_reads', 'rna_umis']].sum().reset_index()
+    library_sizes = dat_mg.groupby(['lysis_id'])[['dna_reads', 'dna_umis', 'rna_reads', 'rna_umis']].sum().reset_index()
 
-    dnar_map = dict(zip(library_sizes.library_id, library_sizes.dna_reads))
-    dnau_map = dict(zip(library_sizes.library_id, library_sizes.dna_umis))
-    rnar_map = dict(zip(library_sizes.library_id, library_sizes.rna_reads))
-    rnau_map = dict(zip(library_sizes.library_id, library_sizes.rna_umis))
+    dnar_map = dict(zip(library_sizes.lysis_id, library_sizes.dna_reads))
+    dnau_map = dict(zip(library_sizes.lysis_id, library_sizes.dna_umis))
+    rnar_map = dict(zip(library_sizes.lysis_id, library_sizes.rna_reads))
+    rnau_map = dict(zip(library_sizes.lysis_id, library_sizes.rna_umis))
 
-    dat_mg.loc[:, 'rna_reads_norm'] = dat_mg.rna_reads / dat_mg.library_id.map(rnar_map.__getitem__).astype(np.float32)
-    dat_mg.loc[:, 'rna_umis_norm'] = dat_mg.rna_umis / dat_mg.library_id.map(rnau_map.__getitem__).astype(np.float32)
-    dat_mg.loc[:, 'dna_reads_norm'] = dat_mg.rna_umis / dat_mg.library_id.map(dnar_map.__getitem__).astype(np.float32)
-    dat_mg.loc[:, 'dna_umis_norm'] = dat_mg.dna_umis / dat_mg.library_id.map(dnau_map.__getitem__).astype(np.float32)
+    dat_mg.loc[:, 'rna_reads_norm'] = dat_mg.rna_reads / dat_mg.lysis_id.map(rnar_map.__getitem__).astype(np.float32)
+    dat_mg.loc[:, 'rna_umis_norm'] = dat_mg.rna_umis / dat_mg.lysis_id.map(rnau_map.__getitem__).astype(np.float32)
+    dat_mg.loc[:, 'dna_reads_norm'] = dat_mg.rna_umis / dat_mg.lysis_id.map(dnar_map.__getitem__).astype(np.float32)
+    dat_mg.loc[:, 'dna_umis_norm'] = dat_mg.dna_umis / dat_mg.lysis_id.map(dnau_map.__getitem__).astype(np.float32)
 
     dat = dat_mg
 
@@ -90,8 +90,8 @@ def main(args):
         ax.set_ylim(lims)
     with PdfPages(args.outpdf) as pdf: 
         plt.figure(figsize=(12,8))
-        for lib in dat.library_id.unique():
-            ddf = dat[dat.library_id == lib]
+        for lib in dat.lysis_id.unique():
+            ddf = dat[dat.lysis_id == lib]
             plt.scatter(ddf.rna_reads, ddf.rna_umis, marker='.', label=lib, rasterized=True)
         yxline();
         plt.legend(bbox_to_anchor=(1,1))
@@ -101,8 +101,8 @@ def main(args):
         
         plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250);plt.close()
         plt.figure(figsize=(12,8))
-        for lib in dat.library_id.unique():
-            ddf = dat[dat.library_id == lib]
+        for lib in dat.lysis_id.unique():
+            ddf = dat[dat.lysis_id == lib]
             plt.scatter(ddf.rna_reads, ddf.rna_umis, marker='.', label=lib)
         yxline(min_=1)
         plt.xscale('log'); plt.yscale('log');
@@ -114,8 +114,8 @@ def main(args):
 
 
         plt.figure(figsize=(12,8))
-        for lib in dat.library_id.unique():
-            ddf = dat[dat.library_id == lib]
+        for lib in dat.lysis_id.unique():
+            ddf = dat[dat.lysis_id == lib]
             plt.scatter(ddf.dna_reads, ddf.dna_umis, marker='.', label=lib)
         yxline();
         plt.legend(bbox_to_anchor=(1,1))
@@ -124,8 +124,8 @@ def main(args):
         plt.ylabel('DNA UMI (each cell)');
         
         plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250);plt.close();plt.figure(figsize=(12,8))
-        for lib in dat.library_id.unique():
-            ddf = dat[dat.library_id == lib]
+        for lib in dat.lysis_id.unique():
+            ddf = dat[dat.lysis_id == lib]
             plt.scatter(ddf.dna_reads, ddf.dna_umis, marker='.', label=lib)
         yxline(min_=1)
         plt.xscale('log'); plt.yscale('log');
@@ -139,8 +139,8 @@ def main(args):
         dat.loc[:, 'rna_complexity'] = dat.rna_umis / dat.rna_reads
         plt.figure(figsize=(8,6))
         
-        for lib in dat.library_id.unique():
-            ddf = dat[dat.library_id == lib]
+        for lib in dat.lysis_id.unique():
+            ddf = dat[dat.lysis_id == lib]
             ddf = ddf[(ddf.dna_umis >= 500) & (ddf.rna_umis >= 500)]
             if ddf.shape[0] > 0:
                 plt.scatter(ddf.rna_complexity, ddf.dna_complexity, marker='.', label=lib, rasterized=True)
@@ -152,8 +152,8 @@ def main(args):
         plt.title('Library Complexity per cell\n(500 UMI minimum per cell)');yxline();
         plt.tight_layout();plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250);plt.close()
 
-        for lib in dat.library_id.unique():
-            dsub = dat[dat.library_id == lib]
+        for lib in dat.lysis_id.unique():
+            dsub = dat[dat.lysis_id == lib]
             dsub.to_csv('%s.csv' % lib)
 
             fig, axs = plt.subplots(3,4,constrained_layout=True,figsize=(12,8))
@@ -197,8 +197,8 @@ def main(args):
         
 
         plt.figure(figsize=(12,12))
-        for lib in dat.library_id.unique():
-            ddf = dat[dat.library_id == lib]
+        for lib in dat.lysis_id.unique():
+            ddf = dat[dat.lysis_id == lib]
             plt.scatter(ddf.rna_umis_norm, ddf.dna_umis_norm, marker='.', label=lib)
         yxline();
         plt.legend(bbox_to_anchor=(1,1))
@@ -211,8 +211,8 @@ def main(args):
         
         plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250);plt.close(); plt.figure(figsize=(12,12))
         lowlab = 'low'
-        for lib in dat.library_id.unique():
-            ddf = dat[dat.library_id == lib]
+        for lib in dat.lysis_id.unique():
+            ddf = dat[dat.lysis_id == lib]
             ddf1 = ddf[(ddf.dna_umis >= 300) & (ddf.rna_umis >= 300)]
             ddf2 = ddf[(ddf.dna_umis < 300)  | (ddf.rna_umis < 300)]
             plt.scatter(ddf2.rna_umis_norm, ddf2.dna_umis_norm, marker='.', label=lowlab, color='grey')
@@ -227,13 +227,13 @@ def main(args):
         plt.xscale('log');plt.yscale('log')
         plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250);plt.close()
         
-        covered_both = dat[(dat.rna_umis >= 500) & (dat.dna_umis >=500)].groupby('library_id')['rna_umis'].count().reset_index()
+        covered_both = dat[(dat.rna_umis >= 500) & (dat.dna_umis >=500)].groupby('lysis_id')['rna_umis'].count().reset_index()
         covered_both.columns = ['library', 'n_cells']
         covered_both.loc[:, 'assay'] = 'dna+rna'
-        covered_rna = dat[(dat.rna_umis >=500)].groupby('library_id')['rna_umis'].count().reset_index()
+        covered_rna = dat[(dat.rna_umis >=500)].groupby('lysis_id')['rna_umis'].count().reset_index()
         covered_rna.columns = ['library', 'n_cells']
         covered_rna.loc[:, 'assay'] = 'rna'
-        covered_dna = dat[(dat.dna_umis >= 500)].groupby('library_id')['dna_umis'].count().reset_index()
+        covered_dna = dat[(dat.dna_umis >= 500)].groupby('lysis_id')['dna_umis'].count().reset_index()
         covered_dna.columns = ['library', 'n_cells']
         covered_dna.loc[:, 'assay'] = 'dna'
         

@@ -28,8 +28,8 @@ def main(args):
     counts = dict()
     for fastq in args.annot_fq:
         hdl = gzip.open(fastq, 'rt')
-        for line in hdl:
-            if line[0] != '@':
+        for i, line in enumerate(hdl):
+            if (i % 4) != 0:
                 continue
             vals = line.strip().split('|')[1].split(':')
             if vals[0] == '*':

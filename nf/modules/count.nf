@@ -96,6 +96,7 @@ process umitools_count {
         --gene-tag="${count_tag}" \
         --per-cell \
         --mapping-quality 30 \
+        --cell-tag-split=@ \
         -I "${annot_bam}" \
         -S "${umi_counts_txt}" 2>&1 > "${umi_log}"
 
@@ -107,6 +108,7 @@ process umitools_count {
         --per-gene \
         --gene-tag="${count_tag}" \
         --per-cell \
+        --cell-tag-split=@ \
         --mapping-quality 30 \
         -I "${annot_bam}" \
         -S "${read_counts_txt}" 2>&1 >> "${umi_log}"
