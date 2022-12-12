@@ -11,6 +11,10 @@ RUN /opt/conda/bin/conda install -c defaults -c conda-forge -c bioconda --yes --
     nomkl \
     scikit-bio \
     seaborn \
+    samtools \
+    pysam \
+    distance \
+    logomaker \
     awscli \
     && /opt/conda/bin/conda clean -afy \
     && find /opt/conda/ -follow -type f -name '*.a' -delete \
