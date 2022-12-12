@@ -1,12 +1,11 @@
-name: bwa
+name: splitbam
 channels:
   - defaults
   - conda-forge
   - bioconda
 dependencies:
-  - bwa
-  - openssl=1.0
   - samtools
   - pysam
-  - cutadapt
-prefix: /home/app.dev1/anaconda3/envs/bwa
+  - pandas
+  - bamscale
+prefix: /home/app.dev1/anaconda3/envs/splitbam

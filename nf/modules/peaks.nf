@@ -61,6 +61,63 @@ process MACS2_peakcall {
 }
 
 /*
+ * As MACS2_peakcall, but for multiple input bam files to avoid pre-merging.
+ * Expects something like
+ * MACS2_multi(baminfo.map{it -> tuple(it[0], it[1].collect(), params.RUN_NAME)})
+ */
+process MACS2_multi {
+  conda params.HOME_REPO + '/nf/envs/macs2.yaml'
+
+  input:
+    tuple val(antibody_name), file(bam_file), val(experiment_name)
+
+  output:
+    tuple val(experiment_name), file(merged_peaks), file(peaks_saf), val(antibody_name)
+
+  script:
+    basename = "${experiment_name}_${antibody_name}"
+    bamlist = bam_file.join(' ')
+    filt_bam = basename + '.bam'
+    narrow_peaks = "${basename}_peaks.narrowPeak"
+    broad_peaks = "${basename}_peaks.broadPeak"
+    merged_peaks = "${basename}_peaks_merged.bed"
+    peaks_saf = "${basename}_peaks_merged.saf"
+    """
+    # note - below will UMI-dedup and merge. This has been disabled for efficiency.
+    #echo "${bamlist}" > bamlist.txt
+    #python "${params.HOME_REPO}"/py/macs2_merge.py bamlist.txt > "${filt_bam}"
+    
+    macs2 callpeak -t $bamlist -n "${basename}" --outdir . \
+       -q 0.1 -g "${params.macs_genome_type}" --nomodel
+    macs2 callpeak -t $bamlist --broad -n "${basename}" --outdir . \
+       -q 0.1 -g "${params.macs_genome_type}" --nomodel
+
+    cat "${narrow_peaks}" "${broad_peaks}" | cut -f1-5 | bedtools sort -i /dev/stdin | bedtools merge -i /dev/stdin > "${merged_peaks}"
+    echo "GeneID	Chr	Start	End	Strand" > "${peaks_saf}"
+    cat "${merged_peaks}" | awk '{print "${antibody_name}_Peak."NR"@"\$1":"\$2":"\$3"\t"\$1"\t"\$2"\t"\$3"\t."}' >> "${peaks_saf}"
+      nl=\$(cat ${peaks_saf} | wc -l)
+      if [ "\${nl}" -eq "1" ]; then
+          # just the header
+          if [ "${params.macs_genome_type}" -eq "hs" ]; then
+              echo "nopeak	1	15000000	16000000	." >> ${peaks_saf}
+          else
+              echo "nopeak	chr1	15000000	16000000	." >> ${peaks_saf}
+          fi
+      fi
+    rm -f "${filt_bam}"
+    """
+    
+  stub:
+    basename = "${experiment_name}_${antibody_name}"
+    merged_peaks = "${basename}_peaks_merged.bed"
+    peaks_saf = "${basename}_peaks_merged.saf"
+    """
+    touch "${merged_peaks}" "${peaks_saf}"
+    """
+    
+}
+
+/*
  * This module defines a process to merge multiple SAF files 
  *
  *
@@ -112,9 +169,9 @@ process chip_qc {
   script:
     cell_stats = "${chipfile_id}.chipQC_cell.txt"
     sample_stats = "${chipfile_id}.chipQC_sample.txt"
-
+    bam_file_lst=bam_file.join(',')
     """
-    python "${HOME_REPO}/py/chipQC.py" "${bam_file}" "${saf_file}" "${cell_stats}" --sample_out "${sample_stats}"
+    python "${HOME_REPO}/py/chipQC.py" "${bam_file_lst}" "${saf_file}" "${cell_stats}" --sample_out "${sample_stats}"
     """
 
   stub:

@@ -43,6 +43,7 @@ RE_LENGTH = 8
 
 inext = lambda q: next(iter(q))
 
+
 def get_args():
     parser = ArgumentParser('PairedTag_R2_Parser')
     parser.add_argument('R2_fastq', help='The R2 fastq file')
@@ -52,6 +53,7 @@ def get_args():
     parser.add_argument('output', help='The output .csv linking read name to disambiguated barcode')
     parser.add_argument('--threads', help='The number of threads to use', default=1, type=int)
     parser.add_argument('--umi_size', help='The size of the UMI in bp', default=10, type=int)
+    parser.add_argument('--library_id', help='The library id to use (otherwise infer from fastq)', default=None, type=str)
 
     return parser.parse_args()
 
@@ -200,6 +202,7 @@ def extract_barcodes(seq, linker1, linker2, lumi, lbc, lsn, lln):
 def parse_R2_barcodes_(args):
     return parse_barcodes_chunk(*args)
 
+
 def parse_barcodes_chunk(reads, l1, l2, umi_bp, bc_bp, sn_bp, ln_bp,
                          bc_map, sn_map):
     """
@@ -272,15 +275,22 @@ def rescue(seq, seqmap):
 
     return '*'
 
+
 def basename(fn):
     return fn.split('/')[-1]
 
 
-def get_sample_seqs(fasta_or_digest, input_fastq):
+def get_sample_seqs(fasta_or_digest, input_fastq, library_id):
+    print(basename(input_fastq))
     if fasta_or_digest[-4:] == '.csv':
         records = [r for r in DictReader(open(fasta_or_digest))]
-        print(records)
-        records = [r for r in records if basename(r['fastq2']) == basename(input_fastq)]
+        print({basename(x['fastq2']) for x in records})
+        print(library_id)
+        print({r['library_id'] for r in records})
+        if library_id:
+            records = [r for r in records if basename(r['fastq2']) == basename(input_fastq) and r['library_id'] == library_id]
+        else:
+            records = [r for r in records if basename(r['fastq2']) == basename(input_fastq)]
         print(records)
         return [fasta_record(r['assay_id'], r['barcode']) for r in records] 
     else:
@@ -288,9 +298,10 @@ def get_sample_seqs(fasta_or_digest, input_fastq):
 
 
 def main(args):
+    print(args)
     linker_seqs = list(read_fasta(args.linkers))
     combin_seqs = list(read_fasta(args.well_bc))
-    sample_seqs = get_sample_seqs(args.sample_bc, args.R2_fastq)
+    sample_seqs = get_sample_seqs(args.sample_bc, args.R2_fastq, args.library_id)
     print(sample_seqs)
 
     check_args(args, linker_seqs, sample_seqs, combin_seqs)

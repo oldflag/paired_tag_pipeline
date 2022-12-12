@@ -41,14 +41,13 @@ def get_args():
     return parser.parse_args()
 
 
-
 def compute_cells_per_sample(bcfile):
     per_sample_umi = dict()
     with xopen(bcfile, 'rt') as handle:
         for entry in handle:
             bcinfo = entry.split(',')[1]
             if '*' not in bcinfo:
-                codes = bcinfo.split(':')                                                                                                                                                                                                                       # umi:bc1:bc2:sm:re
+                codes = bcinfo.split(':')   # umi:bc1:bc2:sm:re
                 sample, cell, umi = codes[3], codes[1] + codes[2], codes[0]
                 if sample not in per_sample_umi:
                     per_sample_umi[sample] = dict()
@@ -134,11 +133,7 @@ def get_base(fn, pfx=None):
 
 def main(args):
     print(args)
-    if args.noestimate:
-        ncell, _, cell_per_sam = compute_cells_per_sample(args.bc_csv)
-    else:
-        ncell, _, cell_per_sam = estimate_via_recapture(args.bc_csv, n=1200000)  # use 1.2M reads to estimate # of cells
-
+    ncell, _, cell_per_sam = compute_cells_per_sample(args.bc_csv)
 
     #n_groups = 1 + int(ncell / args.cells_per_fastq)
     groups_per_sample = {sm: 1 + int(nc/args.cells_per_fastq) for sm, nc in cell_per_sam.items()}
@@ -159,7 +154,7 @@ def main(args):
             # make sure that the names really do match
             assert fq.name.split()[0] == bc[0].split()[0], 'FastQ records and barcodes out of phase: %s' % repr((fq, bc))
             # place the barcode info into the name -- before any whitespace -- delimited by a |
-            name, sfx = fq.name.split(' ',1)
+            name, sfx = fq.name.split(' ', 1)
             name += '|' + bc[1] + '|' + bc[2]
             if bc[1] == '*':
                 handle = reject_handle

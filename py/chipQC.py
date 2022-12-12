@@ -70,7 +70,11 @@ def getUMI(read):
 def group_umi(reads):
     rbg = defaultdict(list)
     for read in reads:
-        grp = (read.get_tag('RG'), read.get_tag('CB'), getUMI(read))
+        if read.has_tag('RG'):
+            grp = (read.get_tag('RG'), read.get_tag('CB'), getUMI(read))
+        else:
+            lib = read.get_tag('CB').split(':')[0]
+            grp = (lib + '__UNK__UNK__UNK', read.get_tag('CB'), read.get_tag('CR').split(':')[0]) 
         rbg[grp].append(read)
     return rbg
 
@@ -174,12 +178,17 @@ def div_(a, b):
     return a/b
 
 
-def compute_sample_stats(cell_stats):
+def compute_sample_stats(cell_stats, a2s_map):
     sample_stats = dict()
     for fc in cell_stats:
-        sample, cell = fc.split('.', 1)
-        if cell == '_ALL_':
-            continue
+        if '*' not in fc:
+            library, antibody, assay, w1, w2 = fc.split(':') 
+        else:
+            library, antibody, assay = fc.split(':')[:3]
+            continue   # can't assign the cell, don't count it
+        # re-key
+        sample_id = a2s_map.get(assay, assay)
+        sample = library + ':' + sample_id + ':' + antibody
         good_reads = cell_stats[fc]['retained']['in_peak']['reads'] + \
                      cell_stats[fc]['retained']['off_target']['reads']
         good_umi = cell_stats[fc]['retained']['in_peak']['umi'] + \
@@ -337,6 +346,13 @@ def main(args):
          + (if in peak) update peak reads, peak umi
     """
     bam_hdl = pysam.AlignmentFile(args.bam)
+    # the metadata has been encoded in the read group lines; pull out the assay -> sample map
+    assay2sample = dict()
+    for rg_ifo in bam_hdl.header['RG']:
+        rg = rg_ifo['ID']
+        seq, antibody, assay, sample, _ = rg.split('__')
+        assay2sample[assay] = sample
+
     peak_iter = read_peaks(args.peaks, bam_hdl.references)
     peak = next(peak_iter)
     stat_counts = defaultdict(cstats)
@@ -344,7 +360,7 @@ def main(args):
         ppeak = peak
         peak = next_peak(peak, loc, peak_iter, bam_hdl.references)
         for (libsample, cell, umi), reads in umi_group.items():
-            fcell = libsample + '.' + cell.rsplit('.',1)[0]
+            fcell = cell
             if umi is None:
                 stat_counts[fcell]['no_UMI']['reads'] += len(reads)
                 continue
@@ -373,28 +389,33 @@ def main(args):
                  
 
     with open(args.out, 'wt') as out:
-        out.write('sample_id\tlibrary\tsample\tcell\tfilter\ttarget\ttype\tcount\n')
+        out.write('sample_id\tlibrary\tsample\tantibody\tassay\tcell\tfilter\ttarget\ttype\tcount\n')
         for fullcell in stat_counts:
-            sample_id, cell = fullcell.split('.',1)
-            library, sample, antibody, _ = sample_id.split('__') 
+            if '*' not in fullcell:
+                library, antibody, assay_id, w1, w2 = fullcell.split(':')
+                cell = w1 + ":" + w2
+            else:
+                library, antibody, assay_id = fullcell.split(':')[:3]
+                cell = '*'
+            assay2sample.get(assay_id, assay_id)
             for k1 in ('retained', 'filtered_MQ30'):
                 for k2 in ('in_peak', 'off_target', 'in_enhancer', 'in_promoter', 'in_genebody'):
                     for k3 in ('reads', 'umi'):
                         cct = stat_counts[fullcell][k1][k2][k3]
-                        out.write(f'{sample_id}\t{library}\t{sample}\t{cell}\t{k1}\t{k2}\t{k3}\t{cct}\n')
+                        out.write(f'{assay_id}\t{library}\t{sample}\t{antibody}\t{assay_id}\t{cell}\t{k1}\t{k2}\t{k3}\t{cct}\n')
             n_unmapped = stat_counts[fullcell]['unmapped']['reads']
-            out.write(f'{sample_id}\t{library}\t{sample}\t{cell}\tunmapped\tNA\treads\t{n_unmapped}\n')
+            out.write(f'{assay_id}\t{library}\t{sample}\t{antibody}\t{assay_id}\t{cell}\tunmapped\tNA\treads\t{n_unmapped}\n')
 
    
     if args.sample_out is not None:
         # compute per-sample statistics
         with open(args.sample_out, 'wt') as out:
-            out.write('sample_id\tlibrary\tsample\tfeature\tmetric\tvalue\n')
-            for sample_id, sample_stats in compute_sample_stats(stat_counts).items():
-                library, sample, antibody, _ = sample_id.split('__')
+            out.write('sample_id\tlibrary\tsample\tantibody\tfeature\tmetric\tvalue\n')
+            for sample_id, sample_stats in compute_sample_stats(stat_counts, assay2sample).items():
+                library, sample, antibody = sample_id.split(':')[:3]
                 for k1, dct in sample_stats.items():
                     for k2, v in dct.items():
-                        out.write(f'{sample_id}\t{library}\t{sample}\t{k1}\t{k2}\t{v}\n')
+                        out.write(f'{sample_id}\t{library}\t{sample}\t{antibody}\t{k1}\t{k2}\t{v}\n')
 
 
 if __name__ == '__main__':
