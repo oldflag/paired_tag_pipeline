@@ -23,6 +23,8 @@ params.LIBRARY_DIGEST_FILE="<your library digest>.csv"
 params.SAMPLE_DIGEST_FILE="<your sample digest>.csv"
 params.SPECIES="mm"  // replace with "hs" for human
  
+params.output_directory="/NAS1/test_runs/" // set to your desired output directory
+params.HOME_REPO="/home/chartl/repos/pipelines/" // set to the location of the pipelines repository
 """
 
 def varExists(vne) {
@@ -46,8 +48,6 @@ if ( params.RUN_NAME == "<your run name>" ) {
 
 /*** CHANGE NOTHING BELOW HERE ***/
 
-params.output_dir = "/NAS1/test_runs/" + params.RUN_NAME
-params.HOME_REPO = "/home/chartl/repos/pipelines/"
 params.py_dir = params.HOME_REPO + "py/"
 params.LIBRARY_DIGEST = file(params.LIBRARY_DIGEST_FILE)
 params.SAMPLE_DIGEST = file(params.SAMPLE_DIGEST_FILE)
