@@ -18,6 +18,7 @@ process merge_rnaseqc {
   input:
     file metrics_csv  // called with .collect()
     val base_name
+    file py_dir
 
   output:
     file merged_metrics
@@ -38,7 +39,7 @@ process merge_rnaseqc {
          fi
      done < qclist.txt
 
-     python "${params.HOME_REPO}/py/plot_rnaseqc.py" "${merged_metrics}" "${metrics_plots}"
+     python "${py_dir}/plot_rnaseqc.py" "${merged_metrics}" "${metrics_plots}"
      """
 
    stub:

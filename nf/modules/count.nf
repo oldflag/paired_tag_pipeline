@@ -130,7 +130,7 @@ process umitools_count {
  * on e.g., bulk data
  */
 process simple_feature_count {
-  conda params.HOME_REPO + '/nf/envs/featurecounts.yaml'
+  // conda params.HOME_REPO + '/nf/envs/featurecounts.yaml'
   input:
     tuple val(sequence_id), file(bam_file)
     tuple file(annotation_file), val(annotation_type)
@@ -167,7 +167,7 @@ process annotate_multiple_features {
     tuple val(sequence_id), file(bam_file), val(seqtype), val(assay_id), val(antibody)
     tuple file(annotation_file1), val(annotation_type1), val(destination_tag1)
     tuple file(annotation_file2), val(annotation_type2), val(destination_tag2)
-    file(HOME_REPO)
+    file py_dir
 
   output:
     tuple val(sequence_id), file(merged_bam), val(seqtype), val(assay_id), val(antibody)
@@ -211,12 +211,12 @@ process annotate_multiple_features {
     samtools sort tmp.bam > "${annot_bam2}"
     rm "fc_out/${bamname}.bam.featureCounts.bam" tmp.bam
 
-    pyf="${HOME_REPO}/py/combine_tags.py"
+    // pyf="${py_dir}/combine_tags.py"
 
     samtools index "${annot_bam1}"
     samtools index "${annot_bam2}"
 
-    python "\${pyf}" "${annot_bam1}:XT:${destination_tag1}"  "${annot_bam2}:XT:${destination_tag2}" --drop XS "${merged_bam}" 2>&1 > "${merge_log}"
+    python "${py_dir}/combine_tags.py" "${annot_bam1}:XT:${destination_tag1}"  "${annot_bam2}:XT:${destination_tag2}" --drop XS "${merged_bam}" 2>&1 > "${merge_log}"
 
 
     """
@@ -257,7 +257,7 @@ process merge_counts {
   input:
       tuple file(count_files), val(file_header)
       file sample_digest_csv
-      file HOME_REPO
+      file py_dir
 
   output:
       file merged_count_h5ad
@@ -271,7 +271,7 @@ process merge_counts {
       """
       zcat $count_files | awk 'FNR!=1 && \$1=="gene" {next;}{print}' | gzip -c > "${merged_count}"
 
-      python "${HOME_REPO}/py/count2h5ad.py" "${merged_count}" "${sample_digest_csv}" "${merged_count_h5ad}"
+      python "${py_dir}/count2h5ad.py" "${merged_count}" "${sample_digest_csv}" "${merged_count_h5ad}"
 
 
       """
@@ -333,7 +333,7 @@ process h5ad_qc {
     file rna_umi
     file dna_reads
     file dna_umi
-    file HOME_REPO
+    file py_dir
 
   output:
     file out_pdf
@@ -345,7 +345,7 @@ process h5ad_qc {
     out_rna = (rna_umi.toString() - '.h5ad' + '.analysis.h5ad')
     out_dna = (dna_umi.toString() - '.h5ad' + '.analysis.h5ad')
     """
-    python "${HOME_REPO}/py/h5ad_qc.py" "${rna_reads}" "${rna_umi}" "${dna_reads}" "${dna_umi}" "${out_pdf}"
+    python "${py_dir}/h5ad_qc.py" "${rna_reads}" "${rna_umi}" "${dna_reads}" "${dna_umi}" "${out_pdf}"
     """
 
   stub:
@@ -364,11 +364,12 @@ process h5ad_qc {
  * QC pdf file
  */
 process cluster_qc {
-  conda params.HOME_REPO + '/nf/envs/scanalysis.yaml'
+  // conda params.HOME_REPO + '/nf/envs/scanalysis.yaml'
 
   input:
     file rna_umi
     file dna_umi
+    file py_dir
 
   output:
     file out_pdf
@@ -376,7 +377,7 @@ process cluster_qc {
   script:
     out_pdf = "${params.RUN_NAME}_cluster_qc.pdf"
     """
-    python "${params.HOME_REPO}/py/cluster_qc.py" "${dna_umi}" "${rna_umi}" "${out_pdf}"
+    python "${py_dir}/cluster_qc.py" "${dna_umi}" "${rna_umi}" "${out_pdf}"
     """
 
   stub:

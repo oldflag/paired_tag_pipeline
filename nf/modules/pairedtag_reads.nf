@@ -21,21 +21,22 @@ process parse_pairedtag_r2 {
   // conda params.HOME_REPO + '/nf/envs/skbio.yaml'
 
   input:
-    tuple val(sequence_id), file(r2_fastq), val(library_id)
-    file pydir
-    file combin_barcodes
-    file sample_barcodes
-    file linker_file
+    tuple val(sequence_id), file(r2_fastq), val(library_id), val(library_type)
+    
 
 
   output:
     tuple val(sequence_id), file(barcode_csv)
 
   script:
+    py_dir = file(params.py_dir)
+    combin_barcodes = file(params.combin_barcodes)
+    sample_barcodes = file(params.sample_barcodes)
+    linker_file = file(params.linker_file)
     barcode_csv = "${sequence_id}.barcodes.csv.gz"
 
     """
-    python "${pydir}"/parse_R2.py --library_id "${library_id}" --threads "${params.r2_parse_threads}" --umi_size "${params.umi_len}" "${r2_fastq}" "${combin_barcodes}" "${sample_barcodes}" "${linker_file}" "${barcode_csv}"
+    python "${py_dir}"/parse_R2.py --library_id "${library_id}" --threads "${params.r2_parse_threads}" --umi_size "${params.umi_len}" "${r2_fastq}" "${combin_barcodes}" "${sample_barcodes}" "${linker_file}" "${barcode_csv}"
     """
 
   stub:
@@ -64,10 +65,14 @@ process parse_pairedtag_r2 {
  *  + umi_len: the UMI length
  */
 process process_pairedtag {
-  conda params.HOME_REPO + '/nf/envs/skbio.yaml'
+  // conda params.HOME_REPO + '/nf/envs/skbio.yaml'
 
   input:
     tuple val(sequence_id), file(r1_fastq), file(r2_fastq), val(library_id)
+    file py_dir
+    file combin_barcodes
+    file sample_barcodes
+    file linker_file
 
   output:
     val sequence_id
@@ -76,10 +81,13 @@ process process_pairedtag {
 
   script:
     sequence_logo="${sequence_id}.logo.pdf"
+    
+    
+
     """
     mkdir -p out
-    python "${params.py_dir}/pull_linkers.py" "${r2_fastq}" "${sequence_logo}"
-    python "${params.py_dir}/split_pairedtag.py" "${r1_fastq}" "${r2_fastq}" "${params.combin_barcodes}" "${params.sample_barcodes}" "${params.linker_file}" ./out/ --library_id "${library_id}" --threads "${params.r2_parse_threads}" --sequence_id "${sequence_id}" --umi_size "${params.umi_len}"
+    python ${py_dir}/pull_linkers.py "${r2_fastq}" "${sequence_logo}"
+    python ${py_dir}/split_pairedtag.py "${r1_fastq}" "${r2_fastq}" "${combin_barcodes}" "${sample_barcodes}" "${linker_file}" ./out/ --library_id "${library_id}" --threads "${params.r2_parse_threads}" --sequence_id "${sequence_id}" --umi_size "${params.umi_len}"
     #for fqf in `ls out`; do
     #    gzip "out/\${fqf}" &
     #done
@@ -88,6 +96,7 @@ process process_pairedtag {
 
   stub:
     sequence_logo="${sequence_id}.logo.pdf"
+    
     """
     mkdir -p out
     touch "${sequence_logo}"
@@ -113,14 +122,17 @@ process barcode_qc {
   
   input:
     tuple val(sequence_id), file(tagged_fastq)  // using .collect()
+    file py_dir
+    file plate_layout
 
   output:
     tuple val(sequence_id), file(barcode_qc_pdf)
 
   script:
     barcode_qc_pdf = "${sequence_id}.barcode_qc.pdf"
+
     """
-    python "${params.py_dir}"/barcode_qc.py $tagged_fastq --output_pdf "${barcode_qc_pdf}"
+    python ${py_dir}/barcode_qc.py ${tagged_fastq} --output_pdf "${barcode_qc_pdf}" --plate_layout "${plate_layout}"
     """
 
   stub:
@@ -185,13 +197,13 @@ process add_tags {
   
   input:
     tuple val(alignment_id), file(bam_file), val(seqtype), val(assay_id), val(antibody)
-    file(py_dir)
     tuple file(annot1_file), val(annot1_tag), val(annot1_fmt)
     tuple file(annot2_file), val(annot2_tag), val(annot2_fmt)
     tuple file(annot3_file), val(annot3_tag), val(annot3_fmt)
     tuple file(annot4_file), val(annot4_tag), val(annot4_fmt)
     tuple file(annot5_file), val(annot5_tag), val(annot5_fmt)
     tuple file(annot6_file), val(annot6_tag), val(annot6_fmt)
+    file py_dir
 
 
   output:

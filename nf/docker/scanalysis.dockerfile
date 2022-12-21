@@ -12,7 +12,9 @@ RUN /opt/conda/bin/conda install -c defaults -c conda-forge -c bioconda --yes --
     anndata==0.8.0 \
     scanpy \
     pandas \
-    numpy \
+    numpy==1.21 \
+    leidenalg \
+    harmonypy \
     nomkl \
     awscli \
     && /opt/conda/bin/conda clean -afy \

@@ -9,10 +9,11 @@ bwa and pysam."
 
 RUN /opt/conda/bin/conda install -c conda-forge -c bioconda -c defaults --yes --freeze-installed \
     bwa \
-    openssl\
+    openssl \
     samtools=1.12 \
     pysam \
     awscli \
+    cutadapt \
     && /opt/conda/bin/conda clean -afy \
     && find /opt/conda/ -follow -type f -name '*.a' -delete \
     && find /opt/conda/ -follow -type f -name '*.pyc' -delete \

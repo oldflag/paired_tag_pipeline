@@ -134,7 +134,7 @@ def main(args):
         p = subprocess.Popen('cat %s | gzip -c > %s/%s.gz' % (fq, base, fq), shell=True)
         gz_procs.append(p)
         handle_map[sm] = io.open(fq, 'wt')
-
+    
     from contextlib import closing
     with closing(Pool(args.threads, maxtasksperchild=1)) as pool:
         chunk_iter = pool.imap_unordered(annotate_reads_, annot_args)
@@ -144,9 +144,14 @@ def main(args):
                 handle_map[sample_id].write(record.seq + '\n')
                 handle_map[sample_id].write('+\n')
                 handle_map[sample_id].write(record.qual + '\n')
-
+    
     for proc in gz_procs:
-        _ = proc.communicate()
+        try:
+            std_out, std_err = proc.communicate(timeout=10)
+        except subprocess.TimeoutExpired as e:
+            proc.kill()
+            std_out, std_err = proc.communicate()
+            pass
 
     for sample_id, handle in handle_map.items():
         handle.close()

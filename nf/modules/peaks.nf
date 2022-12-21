@@ -66,7 +66,7 @@ process MACS2_peakcall {
  * MACS2_multi(baminfo.map{it -> tuple(it[0], it[1].collect(), params.RUN_NAME)})
  */
 process MACS2_multi {
-  conda params.HOME_REPO + '/nf/envs/macs2.yaml'
+  // conda params.HOME_REPO + '/nf/envs/macs2.yaml'
 
   input:
     tuple val(antibody_name), file(bam_file), val(experiment_name)
@@ -161,7 +161,7 @@ process chip_qc {
 
   input:
     tuple val(chipfile_id), file(bam_file), file(saf_file)
-    file HOME_REPO
+    file py_dir
 
   output:
     tuple val(chipfile_id), file(cell_stats), file(sample_stats)
@@ -171,7 +171,7 @@ process chip_qc {
     sample_stats = "${chipfile_id}.chipQC_sample.txt"
     bam_file_lst=bam_file.join(',')
     """
-    python "${HOME_REPO}/py/chipQC.py" "${bam_file_lst}" "${saf_file}" "${cell_stats}" --sample_out "${sample_stats}"
+    python "${py_dir}/chipQC.py" "${bam_file_lst}" "${saf_file}" "${cell_stats}" --sample_out "${sample_stats}"
     """
 
   stub:
@@ -197,7 +197,7 @@ process merge_chip_qc {
     file chipqc_sample  // expected that .collect() is run. 
     file chipqc_cell // expected that .collect() is run
     val output_base
-    file HOME_REPO
+    file py_dir
 
   output:
     file chipseq_merged_sample
@@ -229,7 +229,7 @@ process merge_chip_qc {
             tail -n +2 \$inf >> "${chipseq_merged_sample}"
         fi
     done < infiles
-    python "${HOME_REPO}/py/chipqc_plots.py" "${chipseq_merged_cell}" "${chipseq_merged_sample}" "${chipseq_plots}"
+    python "${py_dir}/chipqc_plots.py" "${chipseq_merged_cell}" "${chipseq_merged_sample}" "${chipseq_plots}"
     """
 
   stub:
@@ -251,7 +251,7 @@ process merge_chip_qc {
  * HOME_REPO - location of the repository
  */
 process plot_peaks_in_regions {
-  conda params.HOME_REPO + "/nf/env/samplot.yaml"
+  // conda params.HOME_REPO + "/nf/env/samplot.yaml"
 
   input:
     file antibody_bams  // .collect() has been run

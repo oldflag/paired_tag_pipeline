@@ -182,8 +182,8 @@ process bwa_aligner_single {
 
   input:
     tuple val(sequence_id), file(fq_file), val(seqtype)
-    file(genome_reference)
-    file(bwaindex)
+    file genome_reference
+    file bwa_index
 
   output:
     tuple val(sequence_id), file(aln_bam), val(seqtype), val(assay), val(antibody)
@@ -202,7 +202,7 @@ process bwa_aligner_single {
     """
     mkfifo ${tmp_fq}
     cutadapt -a ${params.adapter_seq} -o ${tmp_fq} -j ${params.trim_ncores} -q ${params.trim_qual} -m 25 ${fq_file} > ${trim_report} &
-    bwa mem -t "${params.alignment_ncore}" "${params.genome_reference}" "${tmp_fq}" | samtools view -Shu - | samtools sort - > "${aln_bam}"
+    bwa mem -t "${params.alignment_ncore}" "${bwa_index}/${genome_reference}" "${tmp_fq}" | samtools view -Shu - | samtools sort - > "${aln_bam}"
     rm ${tmp_fq}
     d=\$(samtools view "${aln_bam}" | head -n 10 | wc -l)
     if [[ "\${d}" -lt 2 ]]; then

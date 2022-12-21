@@ -7,10 +7,11 @@ LABEL version="1.0"
 LABEL description="This is a custom Docker Image for \
 macs2, samtools and bedtools."
 
-RUN /opt/conda/bin/conda install -c conda-forge -c bioconda -c defaults --yes --freeze-installed \
+RUN /opt/conda/bin/conda install -c defaults -c conda-forge -c bioconda  --yes --freeze-installed \
+    samtools \
+    pysam \
     macs2 \
-    numpy \
-    samtools=1.12 \
+    numpy=1.22 \
     bedtools \
     awscli \
     && /opt/conda/bin/conda clean -afy \
