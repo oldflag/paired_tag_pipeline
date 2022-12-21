@@ -88,7 +88,7 @@ include { publishData as publishdnabam; publishData as publishrnabam;
 
 /* channel over rows of the digest */
 
-pair_ch = Channel.fromPath(params.LIBRARY_DIGEST).splitCsv(header: true, sep: ",").map{ row -> tuple(row.sequence_id, file(row.fastq1), file(row.fastq2), row.library_id, row.library_type)}
+pair_ch = Channel.fromPath(params.LIBRARY_DIGEST).splitCsv(header: true, sep: ",").map{ row -> tuple(row.sequence_id, file(row.fastq1), file(row.fastq2), row.lysis_id, row.library_type)}
 type_ch = Channel.fromPath(params.LIBRARY_DIGEST).splitCsv(header:true, sep: ",").map{ row -> tuple(row.sequence_id, row.library_type) }
 
 def inner_join(ch_a, ch_b) {
