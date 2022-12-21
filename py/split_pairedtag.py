@@ -106,11 +106,11 @@ def annotate_reads_(args):
 
 def build_sample_fq_map(manifest_f, assay_ids, this_seq_id):
     reader = DictReader(open(manifest_f), delimiter=',')
-    records = {r['assay_id']: r for r in reader if r['sequence_id'] == this_seq_id}
+    records = {r['assay_info']: r for r in reader if r['sequence_id'] == this_seq_id}
     fqs = dict()
     for aid in assay_ids:
         rec = records[aid]
-        sid, ab = rec['sequence_id'], rec['antibody_name']
+        sid, ab = rec['sequence_id'], rec['antibody_target']
         smid = rec['sample_id']
         fqf = f'{sid}__{aid}__{ab}__{smid}__1.fq'
         fqs[aid] = fqf
@@ -155,6 +155,10 @@ def main(args):
 
     for sample_id, handle in handle_map.items():
         handle.close()
+
+    for proc in gz_procs:
+        _ = proc.communicate()
+
 
 
 if __name__ == '__main__':

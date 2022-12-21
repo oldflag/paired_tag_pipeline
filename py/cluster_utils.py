@@ -215,15 +215,15 @@ def jaccard_diagnostics(dn_adata, n_approx=500, winsor=99.0, title=''):
      + Empaneled pairwise jaccard boxplot
     """
     J, E, C = binary_jaccard(dn_adata)
-    #Jn = blockwise_normalize_jaccard(J, E, dn_adata.obs.library_id.astype(str), n_approx, winsor)
+    #Jn = blockwise_normalize_jaccard(J, E, dn_adata.obs.lysis_id.astype(str), n_approx, winsor)
     Jn = normalize_jaccard(J, E, n_approx, winsor)
     D = Jn.sum(axis=1)
     assay_diagn = pd.DataFrame.from_dict({
-        'assay_id': dn_adata.obs.assay_id.values,
+        'assay_info': dn_adata.obs.assay_info.values,
         'bin_coverage': C,
         'jaccard_intensity': D,
         'mean_jaccard': (J.sum(axis=1)-1)/(2*(J.shape[0]-1)),
-        'library_id': dn_adata.obs.library_id.values
+        'lysis_id': dn_adata.obs.lysis_id.values
     })
     k = Jn.shape[0]
     ix = np.random.choice(int(k*(k-1)/2), 1000, replace=False)
@@ -232,10 +232,10 @@ def jaccard_diagnostics(dn_adata, n_approx=500, winsor=99.0, title=''):
     axs[0, 0].hist(C, bins=50)
     axs[0, 0].set_xlabel('Cell mean coverage / bin')
     axs[0, 0].set_rasterized(True)
-    sbn.boxplot(data=assay_diagn, x='assay_id', y='bin_coverage', ax=axs[0, 1])
+    sbn.boxplot(data=assay_diagn, x='assay_info', y='bin_coverage', ax=axs[0, 1])
     axs[0, 1].set_xticklabels(axs[0, 1].get_xticklabels(), rotation=90, fontsize=7)
     axs[0, 1].set_rasterized(True)
-    sbn.scatterplot(data=assay_diagn, x='bin_coverage', y='mean_jaccard', hue='library_id', ax=axs[0, 2], s=1)
+    sbn.scatterplot(data=assay_diagn, x='bin_coverage', y='mean_jaccard', hue='lysis_id', ax=axs[0, 2], s=1)
     #axs[0, 2].scatter(C, (J.sum(axis=1)-1) / (2*(J.shape[0] - 1)), s=1)
     axs[0, 2].set_xlabel('Cell mean coverage / bin')
     axs[0, 2].set_ylabel('Cell average Jaccard')
@@ -247,7 +247,7 @@ def jaccard_diagnostics(dn_adata, n_approx=500, winsor=99.0, title=''):
     axs[1, 1].hist(Jn[np.tril_indices(Jn.shape[0], -1)][ix])
     axs[1, 1].set_xlabel('Corrected Pairwise Jaccard')
     axs[1, 1].set_rasterized(True)
-    sbn.boxplot(data=assay_diagn, x='assay_id', y='jaccard_intensity', ax=axs[1, 2])
+    sbn.boxplot(data=assay_diagn, x='assay_info', y='jaccard_intensity', ax=axs[1, 2])
     axs[1, 2].set_xticklabels(axs[1, 2].get_xticklabels(), rotation=90, fontsize=7)
     axs[1, 2].set_rasterized(True)
 
@@ -266,29 +266,29 @@ def jaccard_diagnostics(dn_adata, n_approx=500, winsor=99.0, title=''):
     bpdf = pd.DataFrame.from_dict({
         'row_index': tril_ix[0],
         'col_index': tril_ix[1],
-        'assay1': dn_adata.obs.assay_id.values[tril_ix[0]],
-        'assay2': dn_adata.obs.assay_id.values[tril_ix[1]],
+        'assay1': dn_adata.obs.assay_info.values[tril_ix[0]],
+        'assay2': dn_adata.obs.assay_info.values[tril_ix[1]],
         'jaccard': Jn[tril_ix]
     })
     plt.figure()
 
-    assay_ids = sorted(dn_adata.obs.assay_id.unique().astype(str))
-    if len(assay_ids) == 1:
+    assay_infos = sorted(dn_adata.obs.assay_info.unique().astype(str))
+    if len(assay_infos) == 1:
         rr, cc = 1, 1
-    elif len(assay_ids) == 2:
+    elif len(assay_infos) == 2:
         rr, cc = 1, 2
-    elif len(assay_ids) == 3:
+    elif len(assay_infos) == 3:
         rr, cc, = 1, 3
-    elif len(assay_ids) == 4:
+    elif len(assay_infos) == 4:
         rr, cc = 2, 2
     else:
-        rr, cc = 1 + int(np.sqrt(len(assay_ids))), 1+int(np.sqrt(len(assay_ids)))
+        rr, cc = 1 + int(np.sqrt(len(assay_infos))), 1+int(np.sqrt(len(assay_infos)))
     fig, axs = plt.subplots(rr, cc, constrained_layout=True, figsize=(6*2.5, 4*2.5))
-    for i, aid in enumerate(assay_ids):
+    for i, aid in enumerate(assay_infos):
         c = i % cc
         r = min(int(i/cc), rr) - 1
         ddf = bpdf[bpdf.assay1 == aid]
-        if len(assay_ids) < 4:
+        if len(assay_infos) < 4:
             sbn.boxplot(data=ddf, x='assay2', y='jaccard', ax=axs[c])
             axs[c].set_title(aid, size=8)
             axs[c].set_xticklabels(axs[c].get_xticklabels(), rotation=90, fontsize=7)
@@ -318,10 +318,10 @@ def do_dna_cluster_(dat_dna_analysis, npc, drop_first=True, resolution=0.5,
     on a given jaccard-equipped adata object, and create the following
     empaneled diagnostic plot:
       + PCA 'elbow' plot
-      + PC1/PC2 scatterplot, post-normalization, keyed by 'correct' or 'assay_id'
-      + PC3/PC4 scatterplot, post-normalization, keyed by 'correct' or 'assay_id'
+      + PC1/PC2 scatterplot, post-normalization, keyed by 'correct' or 'assay_info'
+      + PC3/PC4 scatterplot, post-normalization, keyed by 'correct' or 'assay_info'
       + UMAP scatterplot, colored by leiden clusters
-      + UMAP scatterplot, colored by 'correct' or 'assay_id'
+      + UMAP scatterplot, colored by 'correct' or 'assay_info'
       + t-SNE scatterplot, colored by leiden clusters
 
 
@@ -371,7 +371,7 @@ def do_dna_cluster_(dat_dna_analysis, npc, drop_first=True, resolution=0.5,
     axs[0, 0].set_xlabel('Eigenvalue #')
     axs[0, 0].set_ylabel('Eigenvalue')
 
-    color_key = correct if correct is not None else 'assay_id'
+    color_key = correct if correct is not None else 'assay_info'
     pca_data = pd.DataFrame.from_dict({
         'PC1': dat_dna_analysis.obsm[rep_use][:, 0],
         'PC2': dat_dna_analysis.obsm[rep_use][:, 1],
@@ -491,28 +491,28 @@ def cluster_antibody_dna(dat_dna, antibody, n_pcs=15, drop_first=1, min_bins=300
     dat_dna_analysis.obs.loc[:, 'filt_dna_umi'] = dat_dna_analysis.X.sum(axis=1).A1
 
     # num cells by assay / library
-    cell_counts_assay = dat_dna_analysis.obs.groupby('assay_id')[['cell_id']].count().reset_index()
-    sbn.barplot(data=cell_counts_assay, x='assay_id', y='cell_id', ax=axs[0, 2])
+    cell_counts_assay = dat_dna_analysis.obs.groupby('assay_info')[['cell_id']].count().reset_index()
+    sbn.barplot(data=cell_counts_assay, x='assay_info', y='cell_id', ax=axs[0, 2])
     axs[0, 2].set_xticklabels(axs[0, 2].get_xticklabels(), rotation=90, fontsize=7)
     axs[0, 2].set_xlabel('Assay')
     axs[0, 2].set_ylabel('# of Cells (pass-filter)')
     axs[0, 2].set_rasterized(True)
 
-    cell_counts_library = dat_dna_analysis.obs.groupby('library_id')[['cell_id']].count().reset_index()
-    sbn.barplot(data=cell_counts_library, x='library_id', y='cell_id', ax=axs[1,0])
+    cell_counts_library = dat_dna_analysis.obs.groupby('lysis_id')[['cell_id']].count().reset_index()
+    sbn.barplot(data=cell_counts_library, x='lysis_id', y='cell_id', ax=axs[1,0])
     axs[1, 0].set_xticklabels(axs[1, 0].get_xticklabels(), rotation=90, fontsize=7)
     axs[1, 0].set_xlabel('Library')
     axs[1, 0].set_ylabel('# of Cells (pass-filter)')
     axs[1, 0].set_rasterized(True)
 
     # num umi / cell by assay / library
-    sbn.boxplot(data=dat_dna_analysis.obs, x='assay_id', y='filt_dna_umi', ax=axs[1,1])
+    sbn.boxplot(data=dat_dna_analysis.obs, x='assay_info', y='filt_dna_umi', ax=axs[1,1])
     axs[1, 1].set_xticklabels(axs[1, 1].get_xticklabels(), rotation=90, fontsize=7)
     axs[1, 1].set_xlabel('Assay')
     axs[1, 1].set_ylabel('# of UMI (per cell, post-bin filter)')
     axs[1, 1].set_rasterized(True)
 
-    sbn.boxplot(data=dat_dna_analysis.obs, x='library_id', y='filt_dna_umi', ax=axs[1,2])
+    sbn.boxplot(data=dat_dna_analysis.obs, x='lysis_id', y='filt_dna_umi', ax=axs[1,2])
     axs[1, 2].set_xticklabels(axs[1, 2].get_xticklabels(), rotation=90, fontsize=7)
     axs[1, 2].set_xlabel('Library')
     axs[1, 2].set_ylabel('# of UMI (per cell, post-bin filter)')
@@ -552,12 +552,12 @@ def find_modes1d(xdata, res=5000, bw=0.225):
     return x[np.where(p2n)], x[np.where(n2p)]
 
 
-def select_cells_assay_(anndata, assay_id, library_id, fallback_dna_umi, fallback_rna_umi, fallback_only=False, min_th=0.75, max_th=1.25):
+def select_cells_assay_(anndata, assay_info, lysis_id, fallback_dna_umi, fallback_rna_umi, fallback_only=False, min_th=0.75, max_th=1.25):
     """
     Automatically select cells based on the dna/rna read distribution by searching for
     modes in a (typically) bimodal distribution.
     """
-    assay_ix = np.where((anndata.obs.assay_id == assay_id) & (anndata.obs.library_id == library_id))[0]
+    assay_ix = np.where((anndata.obs.assay_info == assay_info) & (anndata.obs.lysis_id == lysis_id))[0]
     if anndata.obs.antibody_name.values[assay_ix[0]] == 'NA':
         r = np.sqrt(np.log10(anndata.obs.rna_reads.values[assay_ix]) ** 2)
         theta = (0 * r) + 1
@@ -575,7 +575,7 @@ def select_cells_assay_(anndata, assay_id, library_id, fallback_dna_umi, fallbac
     lower, upper = peaks[(peaks > pt[0]) & (peaks < pt[1])].mean(), peaks[(peaks > pt[1]) & (peaks < pt[2])].mean()
     keep_vec = anndata.obs.loc[:, 'keep_cell_'].values
     if fallback_only or np.isnan(upper):
-        print('Upper peak is too low for %s; falling back to UMI' % assay_id)
+        print('Upper peak is too low for %s; falling back to UMI' % assay_info)
         dna_u, rna_u = anndata.obs.dna_umis.values[assay_ix], anndata.obs.rna_umis.values[assay_ix]
         ix2 = np.where((dna_u >= fallback_dna_umi) & (rna_u >= fallback_rna_umi))
         keep_idx = assay_ix[ix2]
@@ -583,7 +583,7 @@ def select_cells_assay_(anndata, assay_id, library_id, fallback_dna_umi, fallbac
         try:
             cut = troughs[(troughs > lower) & (troughs < upper)][-1]
             if np.isnan(cut) or np.isnan(lower) or np.isnan(upper):
-                print('Cell distribution monotonic or unimodal for %s; falling back to UMI' % assay_id)
+                print('Cell distribution monotonic or unimodal for %s; falling back to UMI' % assay_info)
                 keep_vec = anndata.obs.loc[:, 'keep_cell_'].values
                 dna_u, rna_u = anndata.obs.dna_umis.values[assay_ix], anndata.obs.rna_umis.values[assay_ix]
                 ix2 = np.where((dna_u >= fallback_dna_umi) & (rna_u >= fallback_rna_umi))
@@ -596,11 +596,11 @@ def select_cells_assay_(anndata, assay_id, library_id, fallback_dna_umi, fallbac
                     ix2 = np.where(r[ix1] > cut)
                 keep_idx = assay_ix[ix1][ix2]
         except IndexError:
-            print('Upper peak is too low for %s; falling back to UMI' % assay_id)
+            print('Upper peak is too low for %s; falling back to UMI' % assay_info)
             dna_u, rna_u = anndata.obs.dna_umis.values[assay_ix], anndata.obs.rna_umis.values[assay_ix]
             ix2 = np.where((dna_u >= fallback_dna_umi) & (rna_u >= fallback_rna_umi))
             keep_idx = assay_ix[ix2]
-    print('Selected_%s: %d' % (library_id, keep_idx.shape[0]))
+    print('Selected_%s: %d' % (lysis_id, keep_idx.shape[0]))
 
 
     keep_vec[keep_idx] = True
@@ -626,24 +626,24 @@ def select_cells(anndata, fallback_dna_umi=350, fallback_rna_umi=350, fallback_o
     """
     print('Selecting cells...')
     anndata.obs.loc[:, 'keep_cell_'] = False  # set all to false (to generate the column)
-    for library_id in anndata.obs.library_id.unique():
-        for assay_id in anndata.obs.assay_id.unique():
+    for lysis_id in anndata.obs.lysis_id.unique():
+        for assay_info in anndata.obs.assay_info.unique():
             # check that there are some records
-            n = ((anndata.obs.library_id == library_id) & (anndata.obs.assay_id == assay_id)).sum()
+            n = ((anndata.obs.lysis_id == lysis_id) & (anndata.obs.assay_info == assay_info)).sum()
             if n > 0:
-                anndata = select_cells_assay_(anndata, assay_id, library_id, fallback_dna_umi, fallback_rna_umi, fallback_only)
+                anndata = select_cells_assay_(anndata, assay_info, lysis_id, fallback_dna_umi, fallback_rna_umi, fallback_only)
 
-    library_ids = anndata.obs.library_id.unique()
+    lysis_ids = anndata.obs.lysis_id.unique()
     rr, cc = (3, 4)
-    for library_id in library_ids:
+    for lysis_id in lysis_ids:
         fig, axs = plt.subplots(rr, cc, figsize=(6 * 3, 6 * 3))
-        fig.suptitle(library_id)
-        assay_ids = anndata[anndata.obs.library_id == library_id].obs.assay_id.unique()
-        for i, aid in enumerate(assay_ids):
+        fig.suptitle(lysis_id)
+        assay_infos = anndata[anndata.obs.lysis_id == lysis_id].obs.assay_info.unique()
+        for i, aid in enumerate(assay_infos):
             r = min(int(i / cc), cc) - 1
             c = i % cc
             print((i,r,c))
-            dsub = anndata[(anndata.obs.assay_id == aid) & (anndata.obs.library_id == library_id)]
+            dsub = anndata[(anndata.obs.assay_info == aid) & (anndata.obs.lysis_id == lysis_id)]
             axs[r, c].scatter(dsub.obs.rna_reads, dsub.obs.dna_reads, s=1)
             dsub2 = dsub[dsub.obs.keep_cell_]
             axs[r, c].scatter(dsub2.obs.rna_reads, dsub2.obs.dna_reads, s=1)
@@ -672,7 +672,7 @@ def cluster_pairedtag_dna(dat_dna, lim_features=250, lim_molecule=320, max_molec
 
     Parameters
     ----------
-    dat_dna : An anndata object for dna, with .X, library_id, sample_id, antibody_name, and cell_id components
+    dat_dna : An anndata object for dna, with .X, lysis_id, sample_id, antibody_name, and cell_id components
     lim_features : Minimum # bins a cell must have to include
     lim_molecule : Minimum # of molecules (UMI) a cell must have to
     max_molecule : Exclude cells with UMI above this threshold
@@ -774,41 +774,42 @@ def cluster_pairedtag_rna(obj, min_umi=350, max_umi=3500, min_cells_gene=10, n_p
     print('... final shape: %s' % (str(obj.shape)))
 
     if obj.shape[0] < min_cells:
-        obj.obs.loc[:, 'leiden'] = np.nan
+        if obj.shape[0] > 0:
+            obj.obs.loc[:, 'leiden'] = np.nan
         return obj
 
     fig, axs = plt.subplots(2, 3, constrained_layout=True, figsize=(6 * 2.5, 4 * 2.5))
-    sbn.countplot(data=obj.obs, x='assay_id', ax=axs[0, 0])
+    sbn.countplot(data=obj.obs, x='assay_info', ax=axs[0, 0])
     axs[0, 0].set_xticklabels(axs[0, 0].get_xticklabels(), rotation=90, fontsize=7)
     axs[0, 0].set_xlabel('Assay ID')
     axs[0, 0].set_ylabel('# of cells (pass-filter)')
     axs[0, 0].set_rasterized(True)
 
-    sbn.countplot(data=obj.obs, x='library_id', ax=axs[0, 1])
+    sbn.countplot(data=obj.obs, x='lysis_id', ax=axs[0, 1])
     axs[0, 1].set_xticklabels(axs[0, 1].get_xticklabels(), rotation=90, fontsize=7)
     axs[0, 1].set_xlabel('Library ID')
     axs[0, 1].set_ylabel('# of cells (pass-filter)')
     axs[0, 1].set_rasterized(True)
 
-    sbn.boxplot(data=obj.obs, x='assay_id', y='rna_umis', ax=axs[0, 2])
+    sbn.boxplot(data=obj.obs, x='assay_info', y='rna_umis', ax=axs[0, 2])
     axs[0, 2].set_xticklabels(axs[0, 2].get_xticklabels(), rotation=90, fontsize=7)
     axs[0, 2].set_xlabel('Assay ID')
     axs[0, 2].set_ylabel('# of UMI (RNA)')
     axs[0, 2].set_rasterized(True)
 
-    sbn.boxplot(data=obj.obs, x='library_id', y='rna_umis', ax=axs[1, 0])
+    sbn.boxplot(data=obj.obs, x='lysis_id', y='rna_umis', ax=axs[1, 0])
     axs[1, 0].set_xticklabels(axs[1, 0].get_xticklabels(), rotation=90, fontsize=7)
     axs[1, 0].set_xlabel('Library ID')
     axs[1, 0].set_ylabel('# of UMI (RNA)')
     axs[1, 0].set_rasterized(True)
 
-    sbn.boxplot(data=obj.obs, x='assay_id', y='pct_mito', ax=axs[1, 1])
+    sbn.boxplot(data=obj.obs, x='assay_info', y='pct_mito', ax=axs[1, 1])
     axs[1, 1].set_xticklabels(axs[1, 1].get_xticklabels(), rotation=90, fontsize=7)
     axs[1, 1].set_xlabel('Assay ID')
     axs[1, 1].set_ylabel('% Mitochondrial RNA')
     axs[1, 1].set_rasterized(True)
 
-    sbn.boxplot(data=obj.obs, x='library_id', y='pct_mito', ax=axs[1, 2])
+    sbn.boxplot(data=obj.obs, x='lysis_id', y='pct_mito', ax=axs[1, 2])
     axs[1, 2].set_xticklabels(axs[1, 2].get_xticklabels(), rotation=90, fontsize=7)
     axs[1, 2].set_xlabel('Library ID')
     axs[1, 2].set_ylabel('% Mitochondrial RNA')
@@ -871,7 +872,7 @@ def cluster_pairedtag_rna(obj, min_umi=350, max_umi=3500, min_cells_gene=10, n_p
     obj.obs.loc[:, 'leiden'] = km.labels_
 
 
-    color_key = harmonize if harmonize is not None else 'assay_id'
+    color_key = harmonize if harmonize is not None else 'assay_info'
     pca_data = pd.DataFrame.from_dict({
         'PC1': obj.obsm[rep_use][:, 0],
         'PC2': obj.obsm[rep_use][:, 1],
@@ -906,7 +907,7 @@ def cluster_pairedtag_rna(obj, min_umi=350, max_umi=3500, min_cells_gene=10, n_p
     fig, axs = plt.subplots(2, 3, constrained_layout=True, figsize=(6 * 2.5, 4 * 2.5))
     sbn.scatterplot(data=pca_data, x='UMAP1', y='UMAP2', hue='leiden', legend=False, ax=axs[0, 0], s=3)
     axs[0, 0].set_rasterized(True)
-    batch_hue = harmonize if harmonize is not None else 'assay_id'
+    batch_hue = harmonize if harmonize is not None else 'assay_info'
     sbn.scatterplot(data=pca_data, x='UMAP1', y='UMAP2', hue=batch_hue, legend=False, ax=axs[0, 1], s=3)
     axs[0, 1].set_rasterized(True)
     sbn.scatterplot(data=pca_data, x='UMAP1', y='UMAP2', hue='antibody_name', legend=False, ax=axs[0, 2], s=3)

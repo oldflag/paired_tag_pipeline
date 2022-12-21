@@ -37,7 +37,7 @@ process star_aligner_single {
     trim_report = prefix + ".trim_report.txt"
     """
     mkfifo ${tmp_fq}
-    cutadapt -a ${params.adapter_seq} -o ${tmp_fq} -j ${params.trim_ncores} -q ${params.trim_qual} -m 25 ${input_fq1} > ${trim_report} &
+    cutadapt -a ${params.adapter_seq} -g ${params.universal_seq} -g ${params.transposase_seq} --times 2 -o ${tmp_fq} -j ${params.trim_ncores} -q ${params.trim_qual} -m 25 ${input_fq1} > ${trim_report} &
     STAR --readFilesIn $tmp_fq \\
         --runThreadN $params.alignment_ncore \\
         --twopassMode None \\
@@ -121,20 +121,19 @@ process trimming_bwa {
     bam="${sequence_id}.bam"
     int_bam="${sequence_id}.uns.bam"
     """
-    mkfifo "${int_bam}"
     if [ "${fq2}" == "null" ]; then
         tmp_fq="trimmed.fq"
         mkfifo \$tmp_fq
-        cutadapt -a ${params.adapter_seq} -o \${tmp_fq} -j ${params.trim_ncores} -q ${params.trim_qual} -m 25 ${fq1} > trim_report.txt &
+        cutadapt -a ${params.adapter_seq} -g ${params.universal_seq} -g ${params.transposase_seq} --times 2 -o ${fq1} -j ${params.trim_ncores} -q ${params.trim_qual} -m 25 ${input_fq1} > ${trim_report} &
         bwa mem -R "@RG\\tID:${sequence_id}.RG\\tSM:${sequence_id}\\tPL:UNK\\tPU:UNK}" \\
-                -t $params.alignment_ncore -k 17 $params.genome_reference \$tmp_fq | samtools view -hb > ${int_bam}
+                -t $params.alignment_ncore -k 17 $params.genome_reference \$tmp_fq | samtools sort -@ $params.alignment_ncore -o "${bam}"
         rm \$tmp_fq
     elif [ "${fq3}" == "null" ]; then
         tmp_fq1="tmp_r1.fq"
         tmp_fq2="tmp_r2.fq"
-        cutadapt -a ${params.adapter_seq} -j ${params.trim_ncores} -q ${params.trim_qual} -o \$tmp_fq1 -p \$tmp_fq2 $fq1 $fq2 > trim_report.txt 
+        cutadapt -a ${params.adapter_seq} -g ${params.universal_seq} -g ${params.transposase_seq} --times 2 -o \${tmp_fq1} \${tmp_fq2} -j ${params.trim_ncores} -q ${params.trim_qual} -m 25 ${input_fq1} > ${trim_report} &
         bwa mem -R "@RG\\tID:${sequence_id}.RG\\tSM:${sequence_id}\\tPL:UNK\\tPU:UNK" \\
-                -t $params.alignment_ncore -k 17 $params.genome_reference \$tmp_fq1 \$tmp_fq2 | samtools view -hb > ${int_bam}
+                -t $params.alignment_ncore -k 17 $params.genome_reference \$tmp_fq1 \$tmp_fq2 | samtools sort -@ $params.alignment_ncore -o "${bam}"
         rm \$tmp_fq1 \$tmp_fq2
     else
         tmp_fq1="tmp_r1.fq"
@@ -152,9 +151,7 @@ process trimming_bwa {
         samtools merge -o $int_bam ${sequence_id}.p.bam ${sequence_id}.w.bam
         rm \$tmp_fq1 \$tmp_fq2 \$tmp_wid ${sequence_id}.p.bam \${sequence_id}.w.bam
     fi
-        
 
-    samtools sort -@ $params.alignment_ncore "${int_bam}" -o "${bam}"
     """
 
    stub:
@@ -278,7 +275,17 @@ process alignment_qc {
     """
     samtools stats "${bam_file}" | egrep "reads mapped:|reads unmapped:|reads MQ0:" | cut -f2,3 > stats_tmp1
     samtools view -h -q 20 "${bam_file}" | samtools stats | grep "reads mapped:" | sed 's/mapped:/mapped_Q20:/' | cut -f2,3 | awk '{print \$1"_"\$2,\$3}' >> stats_tmp1
+    n_bc=\$(samtools view "${bam_file}" | cut -f1 | tr '|' '\t' | cut -f2 | tr ':' '\t' | cut -f2,3 | sort | uniq | wc -l)
+    aln_bc=\$(samtools view -F 4 "${bam_file}" | cut -f1 | tr '|' '\t' | cut -f2 | tr ':' '\t' | cut -f2,3 | sort | uniq | wc -l)
+    aln_q20_bc=\$(samtools view -q 20 "${bam_file}" | cut -f1 | tr '|' '\t' | cut -f2 | tr ':' '\t' | cut -f2,3 | sort | uniq | wc -l)
+    echo "N barcodes: \${n_bc}" >> stats_tmp1
+    echo "N aligned barcodes: \${aln_bc}" >> stats_tmp1
+    echo "N barcodes Q20: \${aln_q20_bc}" >> stats_tmp1
     ok_cell=\$(samtools view -q 20 "${bam_file}" | cut -f1 | tr '|' '\t' | cut -f2 | tr ':' '\t' | awk '{print \$2,\$3}' | sort | uniq -c | awk '\$1 >= 5000' | wc -l)
+    mean_aln_cell=\$(samtools view -F 4 "${bam_file}" | cut -f1 | tr '|' '\t' | cut -f2 | tr ':' '\t' | awk '{print \$2, \$3}' | sort | uniq -c | awk 'BEGIN{s=0; n=1}{s = s + \$1; n=n+1}END{print(s/n)}')
+    mean_cell_q20=\$(samtools view -q 20 "${bam_file}" | cut -f1 | tr '|' '\t' | cut -f2 | tr ':' '\t' | awk '{print \$2, \$3}' | sort | uniq -c | awk 'BEGIN{s=0; n=1}{s = s + \$1; n=n+1}END{print(s/n)}')
+    echo "Mean aligned per barcode: \${mean_aln_cell}" >> stats_tmp1
+    echo "Mean Q20 aligned per barcode: \${mean_cell_q20}" >> stats_tmp1
     echo "N cells >= 5000 reads: \${ok_cell}" >> stats_tmp1
     good_cell=\$(samtools view -q 20 "${bam_file}" | cut -f1 | tr '|' '\t' | cut -f2 | tr ':' '\t' | awk '{print \$2,\$3}' | sort | uniq -c | awk '\$1 >= 20000' | wc -l)
     echo "N cells >= 20000 reads: \${good_cell}" >> stats_tmp1

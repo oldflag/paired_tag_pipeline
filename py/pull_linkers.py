@@ -42,6 +42,8 @@ def main(args):
     for i, read in enumerate(reads):
         if i < 1000:
             continue
+        if len(read.seq) < (loffset + len(lseq) + 4):
+            continue
         bs = find_best_seq(read.seq)
         PWM += s2c(bs)
         if i > 7001000:
