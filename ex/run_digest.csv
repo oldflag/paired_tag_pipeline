@@ -1,4 +1,0 @@
-sequence_id,read1,read2,keyvalues
-dna1,/data/sampledata/paired_tag/R1_dna_10m.fq.gz,/data/sampledata/paired_tag/dna_10m.fastq.gz,type=dna;ab=aaaaa
-dna2,/data/sampledata/paired_tag/R1_dna_10m.fq.gz,/data/sampledata/paired_tag/dna_10m.fastq.gz,type=dna;ab=bbbbb
-rna1,/data/sampledata/paired_tag/R1_rna_10m.fq.gz,/data/sampledata/paired_tag/rna_10m.fastq.gz,type=rna

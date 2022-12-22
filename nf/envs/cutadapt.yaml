@@ -1,8 +1,0 @@
-name: cutadapt
-channels:
-  - defaults
-  - conda-forge
-  - bioconda
-dependencies:
-  - cutadapt
-prefix: /home/app.dev1/anaconda3/envs/cutadapt

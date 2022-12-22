@@ -102,11 +102,14 @@ if ( params.SPECIES == "hs" ) {
 // modules
 include { trim_fq_single as trim_rna; trim_fq_single as trim_dna} from params.HOME_REPO + "/nf/modules/trim"
 include { process_pairedtag; 
-          barcode_qc as barcode_qc;
+          barcode_qc as barcode_qc
+        } from params.HOME_REPO + "/nf/modules/pairedtag_reads"
+include { star_aligner_single; 
+          bwa_aligner_single; 
+          alignment_qc; 
+          merge_alignment_qc;
           add_tags as tag_rna; 
-          add_tags as tag_dna } from params.HOME_REPO + "/nf/modules/pairedtag_reads"
-include { star_aligner_single; bwa_aligner_single
-          alignment_qc; merge_alignment_qc } from params.HOME_REPO + "/nf/modules/alignment"
+          add_tags as tag_dna } from params.HOME_REPO + '/nf/modules/alignment'
 include { rnaseqc_call; merge_rnaseqc } from params.HOME_REPO + "/nf/modules/rnaseqc"
 include { umitools_count as rna_count; umitools_count as rna_bin_count;
           umitools_count as dna_count;

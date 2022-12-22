@@ -54,6 +54,7 @@ class TrackWindow(object):
     Read:                <----------------------------------------------
     Track:          [-----------]                              [-------------------]
 
+    The assumption is that queries will occur in genomic order; and that the track is sorted in the same order
     """
     def __init__(self, track, refs):
         self.refs = refs

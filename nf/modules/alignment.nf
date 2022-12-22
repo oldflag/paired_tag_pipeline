@@ -332,78 +332,63 @@ process merge_alignment_qc {
     """
 } 
 
-/*
- * This process converts a .bam file into a Signac-compatible
- * fragments file, ensures that it is sorted, block-compresses
- * and indexes the fragments file.
- *
- * Config-defined parameters
- * --------------------------
- * HOME_REPO - the path to the home repository
- * fragment_ncore - the number of cores to use
- */
-process bam_to_frag {
-  conda params.HOME_REPO + '/nf/envs/bamtofrag.yaml'
+process add_tags {
+  // conda params.HOME_REPO + '/nf/envs/bwa.yaml'
+  
   input:
-    file bam_file
+    tuple val(alignment_id), file(bam_file), val(seqtype), val(assay_id), val(antibody)
+    tuple file(annot1_file), val(annot1_tag), val(annot1_fmt)
+    tuple file(annot2_file), val(annot2_tag), val(annot2_fmt)
+    tuple file(annot3_file), val(annot3_tag), val(annot3_fmt)
+    tuple file(annot4_file), val(annot4_tag), val(annot4_fmt)
+    tuple file(annot5_file), val(annot5_tag), val(annot5_fmt)
+    tuple file(annot6_file), val(annot6_tag), val(annot6_fmt)
+    file py_dir
+
 
   output:
-    file fragment_file
-    file fragment_index
+    tuple val(alignment_id), file(annot_bam_file), val(seqtype), val(assay_id), val(antibody)
 
   script:
-    fragment_file = (bam_file.toString() - '.bam') + '.frag.tsv.gz'
-    fragment_index = fragment_file + '.tbi'
+    annot_bam_file = bam_file.simpleName - '.bam' + '_tag.bam'
+    sample_id=bam_file.simpleName.split('__')[3]
     """
-    samtools index $bam_file
-    python $params.HOME_REPO/py/bam2frag.py $bam_file $fragment_file --ncores $params.fragment_ncore
-    zcat $fragment_file | bedtools sort -i /dev/stdin | bgzip -c > ${fragment_file}.tmp
-    mv ${fragment_file}.tmp ${fragment_file}
-    tabix -p bed $fragment_file
-    """
+    strip () {
+        echo "\${1%%.*}"
+    }
 
-   stub:
-     fragment_file = (bam_file.toString() - '.bam') + '.frag.tsv.gz'
-     fragment_index = fragment_file + '.tbi'
-     """
-     touch $fragment_file $fragment_index
-     """
-}
+    tag_args=""
+    if [  \$(strip "${annot1_file}") != "input" ]; then
+        tag_args="\${tag_args} --track ${annot1_file}:${annot1_tag}:${annot1_fmt}"
+    fi
+    
+    if [  \$(strip "${annot2_file}") != "input" ]; then
+        tag_args="\${tag_args} --track ${annot2_file}:${annot2_tag}:${annot2_fmt}"
+    fi
+    if [  \$(strip "${annot3_file}") != "input" ]; then
+        tag_args="\${tag_args} --track ${annot3_file}:${annot3_tag}:${annot3_fmt}"
+    fi
+    if [  \$(strip "${annot4_file}") != "input" ]; then
+        tag_args="\${tag_args} --track ${annot4_file}:${annot4_tag}:${annot4_fmt}"
+    fi
+    if [  \$(strip "${annot5_file}") != "input" ]; then
+        tag_args="\${tag_args} --track ${annot5_file}:${annot5_tag}:${annot5_fmt}"
+    fi
+    if [  \$(strip "${annot6_file}") != "input" ]; then
+        tag_args="\${tag_args} --track ${annot6_file}:${annot6_tag}:${annot6_fmt}"
+    fi
 
-
-/*
- * This process merges multiple fragment files
- *
- * Config-defined parameters
- * ------------
- * HOME_REPO - the path to the home repository
- */
-process merge_frag_files {
-  conda $params.HOME_REPO + '/nf/envs/bamtofrag.yaml'
-
-  input:
-    file fragment_file  // .collect() has been run
-    val run_name
-
-  output:
-    file merged_fragments
-    file merged_fragments_index
-
-  script:
-    merged_fragments = run_name + '_fragments_allAntibodies.tsv.gz'
-    merged_fragments_idnex = merged_fragments + '.tbi'
-    """
-    zcat $fragment_file | bedtools sort - /dev/stin | bgzip -c > ${merged_fragments}
-    tabix -p bed ${merged_fragments}
+    if [ "\${tag_args}" == "" ]; then
+        python "${py_dir}"/add_tags.py "${bam_file}" "${annot_bam_file}" --library "${alignment_id}" --antibody "${antibody}" --assay_id "${assay_id}" --sample_id "${sample_id}"
+    else
+        python "${py_dir}"/add_tags.py "${bam_file}" "${annot_bam_file}" --library "${alignment_id}" --antibody "${antibody}" --assay_id "${assay_id}" --sample_id "${sample_id}" \$tag_args
+    fi
     """
 
   stub:
-    merged_fragments = run_name + '_fragments_allAntibodies.tsv.gz'
-    merged_fragments_idnex = merged_fragments + '.tbi'
+    annot_bam_file = bam_file.simpleName.replace('.bam', '_tag.bam')
     """
-    touch $merged_fragments
-    touch $merged_fragments_index
+    touch "${annot_bam_file}"
     """
 }
-  
-   
+

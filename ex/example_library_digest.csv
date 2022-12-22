@@ -1,5 +1,0 @@
-sequence_id,library_type,fastq1,fastq2
-ZhuDNA_lib18,dna,/NAS1/data/paired-tag-2020/SRR11953293_1.fastq.gz,/NAS1/data/paired-tag-2020/SRR11953293_2.fastq.gz
-ZhuRNA_lib18,rna,/NAS1/data/paired-tag-2020/SRR11953288_1.fastq.gz,/NAS1/data/paired-tag-2020/SRR11953288_2.fastq.gz
-ZhuDNA_lib22,dna,/NAS1/data/paired-tag-2020/SRR11953271_1.fastq.gz,/NAS1/data/paired-tag-2020/SRR11953271_2.fastq.gz
-ZhuRNA_lib22,rna,/NAS1/data/paired-tag-2020/SRR11953252_1.fastq.gz,/NAS1/data/paired-tag-2020/SRR11953252_2.fastq.gz
