@@ -1,0 +1,11 @@
+name: samplot
+channels:
+  - defaults
+  - conda-forge
+  - bioconda
+dependencies:
+  - samplot
+  - samtools
+  - bedtools
+  - tabix
+prefix: /home/app.dev1/anaconda3/envs/samplot

@@ -1,7 +1,0 @@
-name: cutadapt
-channels:
-  - defaults
-  - bioconda
-dependencies:
-  - cutadapt
-prefix: /home/chartl/anaconda3/envs/cutadapt

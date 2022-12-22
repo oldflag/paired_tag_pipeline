@@ -1,7 +1,13 @@
 name: skbio
 channels:
   - defaults
+  - conda-forge
   - bioconda
 dependencies:
   - scikit-bio
-prefix: /home/chartl/anaconda3/envs/skbio
+  - seaborn
+  - samtools
+  - pysam
+  - distance
+  - logomaker
+prefix: /home/app.dev1/anaconda3/envs/skbio

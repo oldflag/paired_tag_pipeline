@@ -1,0 +1,14 @@
+name: scanalysis
+channels:
+  - defaults
+  - conda-forge
+  - bioconda
+dependencies:
+  - seaborn
+  - anndata==0.8.0
+  - scanpy
+  - pandas
+  - numpy<=1.21
+  - leidenalg
+  - harmonypy
+prefix: /home/app.dev1/anaconda3/envs/scanalysis

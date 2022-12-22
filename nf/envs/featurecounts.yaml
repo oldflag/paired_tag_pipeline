@@ -1,12 +1,11 @@
-name: bwa
+name: featurecounts 
 channels:
   - defaults
   - conda-forge
   - bioconda
 dependencies:
-  - bwa
   - openssl=1.0
   - samtools
+  - subread
   - pysam
-  - cutadapt
-prefix: /home/app.dev1/anaconda3/envs/bwa
+prefix: /home/app.dev1/anaconda3/envs/featurecounts

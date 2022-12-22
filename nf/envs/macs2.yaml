@@ -1,0 +1,12 @@
+name: macs2
+channels:
+  - defaults
+  - conda-forge
+  - bioconda
+dependencies:
+  - samtools
+  - pysam
+  - macs2
+  - numpy=1.22
+  - bedtools
+prefix: /home/app.dev1/anaconda3/envs/macs2

@@ -1,0 +1,11 @@
+name: umi_tools
+channels:
+  - defaults
+  - conda-forge
+  - bioconda
+dependencies:
+  - openssl
+  - samtools
+  - umi_tools
+  - anndata
+prefix: /home/app.dev1/anaconda3/envs/umi_tools

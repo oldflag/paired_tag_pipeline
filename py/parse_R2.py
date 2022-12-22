@@ -33,24 +33,27 @@ mappings (provided as fasta files).
 
 """
 from argparse import ArgumentParser
-from utils import read_fasta, read_fastq, xopen
+from utils import read_fasta, read_fastq, xopen, fasta_record
 from skbio.alignment import StripedSmithWaterman
 from multiprocessing import Pool
 from itertools import islice
+from csv import DictReader
 
 RE_LENGTH = 8
 
 inext = lambda q: next(iter(q))
 
+
 def get_args():
     parser = ArgumentParser('PairedTag_R2_Parser')
     parser.add_argument('R2_fastq', help='The R2 fastq file')
     parser.add_argument('well_bc', help='The well barcode fasta file')
-    parser.add_argument('sample_bc', help='The sample barcode fasta file')
+    parser.add_argument('sample_bc', help='The sample barcode fasta file OR sample digest file (.csv)')
     parser.add_argument('linkers', help='The linker fasta file')
     parser.add_argument('output', help='The output .csv linking read name to disambiguated barcode')
     parser.add_argument('--threads', help='The number of threads to use', default=1, type=int)
     parser.add_argument('--umi_size', help='The size of the UMI in bp', default=10, type=int)
+    parser.add_argument('--library_id', help='The library id to use (otherwise infer from fastq)', default=None, type=str)
 
     return parser.parse_args()
 
@@ -103,33 +106,6 @@ def iter_chunk_args(fastq_file, linker1, linker2, barcode_map,
         chunk = list(islice(fastq_iter, chunk_size))
 
 
-
-def __deprecated__iter_read_args(fastq_file, linker1, linker2, barcode_map, 
-                   sample_map, umi_size, linker_size):
-    """
-    For each record in the fastq file, generate the arguments for a call
-    to the R2 parse function.
-
-    :fastq_file: The path to the R2 fastq file
-    :linker1: A -StripedSmithWaterman- object for linker1
-    :linker2: A -StripedSmithWaterman- object for linker2
-    :barcode_map: A dictionary mapping sequences to labels (well barcodes)
-    :sample_map: A dictionary mapping sequences to labels (sample barcodes)
-    :umi_size: The size (in bp) of the UMI sequence
-    :linker_size: The size (in bp) of the linker sequences
-
-    :returns: An iterator over arguments to the R2 parser
-
-    """
-    barcode_size = len(inext(barcode_map))
-    sample_size = len(inext(sample_map))
-    for fastq_record in read_fastq(fastq_file):
-        yield (fastq_record, linker1, linker2, umi_size, 
-               barcode_size, sample_size, linker_size,
-               barcode_map, sample_map)
-
-
-
 def extract_barcodes(seq, linker1, linker2, lumi, lbc, lsn, lln):
     """
     Extract the barcodes from a Paired-Tag second read (R2).
@@ -178,10 +154,23 @@ def extract_barcodes(seq, linker1, linker2, lumi, lbc, lsn, lln):
     if len(seq) < (lumi + 2*lbc + 2*lln + lsn) or seq.count('N') > 3:
         return None, None, None, None, None
 
-    l1, l2 = linker1(seq), linker2(seq)
+    l1 = linker1(seq)
+    # force l2 to be aligned after l1
+    seq2 = seq[(l1['target_begin'] + lln - 1):]
+    l2 = linker2(seq2)
+    l2 = {
+        'optimal_alignment_score': l2['optimal_alignment_score'],
+        'target_begin': l2['target_begin'] + lln + l1['target_begin'] - 1
+    }
+
     if l2['target_begin'] - (l1['target_begin'] + lln) != lbc:
         # alignment failed - distance between linkers is not 1 barcode
-        return None, None, None, None, None
+        # if l2 alignment is good, just modify l1
+        shift = lbc - (l2['target_begin'] - (l1['target_begin'] + lln))
+        if (0 < shift < lbc) and l2['optimal_alignment_score'] > l1['optimal_alignment_score']:
+            l1 = {'target_begin': l1['target_begin'] - shift}
+        else:
+            return None, None, None, None, None
 
     if l1['target_begin'] > lumi + lbc + 5:
         return None, None, None, None, None
@@ -189,23 +178,30 @@ def extract_barcodes(seq, linker1, linker2, lumi, lbc, lsn, lln):
     if l1['target_begin'] < lumi + lbc:
         # skipped base in UMI or barcode -- assume UMI
         bc1 = seq[(l1['target_begin']-lbc):l1['target_begin']]
-        d_ = lumi + lbc - l1['target_begin']
+        d_ = min(lumi, lumi + lbc - l1['target_begin'])
         umi = 'N' * d_ + seq[:(lumi-d_)]
     else:
         umi, bc1 = seq[:lumi], seq[lumi:(lumi + lbc)]
 
     bc2 = seq[(l2['target_begin']-lbc):l2['target_begin']]
     eol2 = l2['target_begin'] + lln
-    tbase = seq[eol2 + 1]
-    eol2 += 1
-    sbc = seq[eol2:(eol2 + lsn)]
-    res = seq[(eol2+lsn):(eol2+lsn+RE_LENGTH)]
+    if eol2 + 1>= len(seq):
+        # the read truncates on or after barcode 2
+        tbase = 'N'
+        sbc = 'N' 
+        res = 'N' * RE_LENGTH
+    else:
+        tbase = seq[eol2]
+        eol2 += 1
+        sbc = seq[eol2:(eol2 + lsn)]
+        res = seq[(eol2+lsn):(eol2+lsn+RE_LENGTH)]
 
     return umi, bc1, bc2, sbc, tbase + res
 
 
 def parse_R2_barcodes_(args):
     return parse_barcodes_chunk(*args)
+
 
 def parse_barcodes_chunk(reads, l1, l2, umi_bp, bc_bp, sn_bp, ln_bp,
                          bc_map, sn_map):
@@ -260,7 +256,7 @@ def parse_R2_barcodes(read, sw_l1, sw_l2, umi_bp, bc_bp, sn_bp,
     # the ers string consists of [typebp][RE seq]
     # if typebp is A, it is dna; T for rna; fallback is to use
     # the restriction enzyme sequence CCTGCAGG (dna) and GCGGCCGC (rna)
-    tr_ers = 'dna' if 'TCGA' in ers else 'rna' if 'GGCC' in ers else 'unk'
+    tr_ers = 'rna' if 'TCGA' in ers else 'dna' if 'GGCC' in ers else 'unk'
 
     return (read.name, f'{tr_umi}:{tr_bc1}:{tr_bc2}:{tr_sbc}:{tr_ers}',
             f'{umi}:{bc1}:{bc2}:{sbc}:{ers}')
@@ -280,10 +276,31 @@ def rescue(seq, seqmap):
     return '*'
 
 
+def basename(fn):
+    return fn.split('/')[-1]
+
+
+def get_sample_seqs(fasta_or_digest, input_fastq, library_id):
+    print(basename(input_fastq))
+    if fasta_or_digest[-4:] == '.csv':
+        records = [r for r in DictReader(open(fasta_or_digest))]
+        # r['implied_id'] = r['sample_id'] + '_' + r['antibody_target'] + '_' + r['dna_well']
+        if library_id:
+            records = [r for r in records if basename(r['fastq2']) == basename(input_fastq) and r['lysis_id'] == library_id]
+        else:
+            records = [r for r in records if basename(r['fastq2']) == basename(input_fastq)]
+        print(records)
+        return [fasta_record(r['assay_info'], r['barcode']) for r in records] 
+    else:
+        return list(read_fasta(fasta_or_digest))
+
+
 def main(args):
+    print(args)
     linker_seqs = list(read_fasta(args.linkers))
-    sample_seqs = list(read_fasta(args.sample_bc))
     combin_seqs = list(read_fasta(args.well_bc))
+    sample_seqs = get_sample_seqs(args.sample_bc, args.R2_fastq, args.library_id)
+    print(sample_seqs)
 
     check_args(args, linker_seqs, sample_seqs, combin_seqs)
 
@@ -311,14 +328,6 @@ def main(args):
 
     if args.threads > 1:
         pool.close()
-
-    
-
-
-
-
-
-
 
 
 
