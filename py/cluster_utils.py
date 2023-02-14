@@ -288,6 +288,8 @@ def jaccard_diagnostics(dn_adata, n_approx=500, winsor=99.0, title=''):
         c = i % cc
         r = min(int(i/cc), rr) - 1
         ddf = bpdf[bpdf.assay1 == aid]
+        if len(assay_infos) == 1:
+            axs = [axs]
         if len(assay_infos) < 4:
             sbn.boxplot(data=ddf, x='assay2', y='jaccard', ax=axs[c])
             axs[c].set_title(aid, size=8)
@@ -345,7 +347,7 @@ def do_dna_cluster_(dat_dna_analysis, npc, drop_first=True, resolution=0.5,
     if drop_first:
         U, Vt, s = U[:, -(npc+1):-1][:, ::-1], Vt[-(npc+1):-1, :][::-1], s[-(npc+1):-1][::-1]
     else:
-        U, Vt, s = U[:, -npc:][:, ::-1], Vt[-npc, :][::-1, :], s[-npc:][::-1]
+        U, Vt, s = U[:, -npc:][:, ::-1], Vt[-npc:, :][::-1, :], s[-npc:][::-1]
 
     dat_dna_analysis.obsm['X_pca'] = U
 
@@ -478,7 +480,9 @@ def cluster_antibody_dna(dat_dna, antibody, n_pcs=15, drop_first=1, min_bins=300
                                   (dat_dna.var.percentile <= max_bin_pct) &
                                   (dat_dna.var.counts >= min_cells_bin)]
 
-    print('Dropped %d bins' % (dat_dna.shape[1] - dat_dna_analysis.shape[1]))
+    print('Dropped %d bins; now %d' % (dat_dna.shape[1] - dat_dna_analysis.shape[1], dat_dna_analysis.shape[1]))
+    if dat_dna_analysis.shape[1] < 10:
+         return dat_dna
 
     axs[0, 1].scatter(dat_dna_analysis.var[dat_dna_analysis.var.analysis == 'retain'].percentile.values,
                       dat_dna_analysis.var[dat_dna_analysis.var.analysis == 'retain'].counts.values,

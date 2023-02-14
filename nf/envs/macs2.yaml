@@ -4,9 +4,11 @@ channels:
   - conda-forge
   - bioconda
 dependencies:
+  - conda-forge::ncurses
   - samtools
   - pysam
   - macs2
   - numpy=1.22
   - bedtools
+  - BAMscale
 prefix: /home/app.dev1/anaconda3/envs/macs2

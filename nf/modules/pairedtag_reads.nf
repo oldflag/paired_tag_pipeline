@@ -17,7 +17,6 @@
  *  + umi_len: the UMI length
  */
 process parse_pairedtag_r2 {
-
   conda params.HOME_REPO + '/nf/envs/skbio.yaml'
 
   input:
