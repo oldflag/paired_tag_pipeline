@@ -9,6 +9,10 @@ import numpy as np
 # convert a long form: <cell> <gene_list> <count> into cell_id.txt gene_id.txt counts.mtx format
 
 in_txt = sys.argv[1]
+if len(sys.argv) > 2:
+    feature_type = sys.argv[2]
+else:
+    feature_type = 'RNA_expression'
 
 genes, cells = list(), list()
 geneset, cellset = dict(), dict()
@@ -58,7 +62,7 @@ with open('barcodes.txt', 'wt') as out:
 
 with open('genes.txt', 'wt') as out:
     for gene in genes:
-        out.write('%s\t%s\tRNA_expression\n' % (gene, gene))
+        out.write('%s\t%s\t%s\n' % (gene, gene, feature_type))
 
 scipy.io.mmwrite('counts.mtx', counts)
 
