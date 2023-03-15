@@ -15,7 +15,7 @@ def main(args):
     bam = pysam.AlignmentFile(args.bam)
     for read in bam.fetch():
         counts['total'] += 1
-        if read.mapping_quality >= 30:
+        if read.mapping_quality >= args.min_mapq:
             counts['Q30'] += 1
             if read.has_tag(args.tag):
                 counts['tagged'] += 1
@@ -36,6 +36,7 @@ def get_args():
     parser.add_argument('bam')
     parser.add_argument('tag')
     parser.add_argument('--regex', default=None)
+    parser.add_argument('min_mapq', type=int, default=0)
 
     return parser.parse_args()
 

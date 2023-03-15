@@ -95,7 +95,7 @@ process umitools_count {
         --per-gene \
         --gene-tag="${count_tag}" \
         --per-cell \
-        --mapping-quality 30 \
+        --mapping-quality 0 \
         --cell-tag-split=@ \
         -I "${annot_bam}" \
         -S "${umi_counts_txt}" 2>&1 > "${umi_log}"
@@ -109,7 +109,7 @@ process umitools_count {
         --gene-tag="${count_tag}" \
         --per-cell \
         --cell-tag-split=@ \
-        --mapping-quality 30 \
+        --mapping-quality 0 \
         -I "${annot_bam}" \
         -S "${read_counts_txt}" 2>&1 >> "${umi_log}"
         
@@ -147,7 +147,7 @@ process simple_feature_count {
     """
     mkdir -p fc_out
     featureCounts -F "${annotation_type}" \
-      -O -Q 30 \
+      -O -Q 0 \
       -T "${params.count_ncores}" \
       --verbose --Rpath fc_out \
       -a "${annotation_file}" -o "${count_file}" \
@@ -187,7 +187,7 @@ process annotate_multiple_features {
     """
     mkdir -p fc_out
     featureCounts -F "${annotation_type1}" \
-      -O -Q 30 \
+      -O -Q 0 \
       -T "${params.count_ncores}" \
       --verbose -R BAM \
       --Rpath fc_out \
@@ -200,7 +200,7 @@ process annotate_multiple_features {
     rm "fc_out/${bamname}.bam.featureCounts.bam" tmp.bam
 
     featureCounts -F "${annotation_type2}" \
-      -O -Q 30 \
+      -O -Q 0 \
       -T "${params.count_ncores}" \
       --verbose -R BAM \
       --Rpath fc_out \

@@ -281,7 +281,6 @@ def basename(fn):
 
 
 def get_sample_seqs(fasta_or_digest, input_fastq, library_id):
-    print(basename(input_fastq))
     if fasta_or_digest[-4:] == '.csv':
         records = [r for r in DictReader(open(fasta_or_digest))]
         # r['implied_id'] = r['sample_id'] + '_' + r['antibody_target'] + '_' + r['dna_well']
@@ -289,7 +288,14 @@ def get_sample_seqs(fasta_or_digest, input_fastq, library_id):
             records = [r for r in records if basename(r['fastq2']) == basename(input_fastq) and r['lysis_id'] == library_id]
         else:
             records = [r for r in records if basename(r['fastq2']) == basename(input_fastq)]
-        print(records)
+
+        if len(records) == 0:
+            records = [r for r in DictReader(open(fasta_or_digest))]
+            # check if there are downsamples
+            match_set = [(basename(r['fastq2']).strip('.fastq.gz') + "_ds.fq.gz") == basename(input_fastq) for r in records]
+            records = [r for i, r in enumerate(records) if match_set[i]]
+        if len(records) == 0:
+            raise ValueError('No matching records')
         return [fasta_record(r['assay_info'], r['barcode']) for r in records] 
     else:
         return list(read_fasta(fasta_or_digest))
