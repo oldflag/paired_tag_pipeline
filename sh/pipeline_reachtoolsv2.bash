@@ -50,7 +50,7 @@ elif [[ "${libtype}" == "RNA" ]]; then
      trim_galore -a CCTGCAGGNNNNACGAATGCTCTGGCCTNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN ${pfx}_BC_cov_trimmed_trimmed.fq.gz ## trim N6 primer
      STAR  --runThreadN 6 --genomeDir ${transcriptome_index} --readFilesIn ${pfx}_BC_cov_trimmed_trimmed_trimmed.fq.gz --readFilesCommand zcat --outFileNamePrefix ${pfx}_ --outSAMtype BAM Unsorted
     samtools view -h -F 256 ${pfx}_Aligned.out.bam -b > ${pfx}_clean.bam
-    samtools sort ${pfx}_clean.bam -o ${pfx}_sorted -T ${pfx}_tmpsrt
+    samtools sort ${pfx}_clean.bam -o ${pfx}_sorted.bam -T ${pfx}_tmpsrt
     $reachtools_bin rmdup2 ${pfx}\_sorted.bam
     $reachtools_bin bam2Mtx2 ${pfx}\_sorted_rmdup.bam ${transcriptome}
     # cleanup
