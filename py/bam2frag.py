@@ -6,11 +6,11 @@ from multiprocessing import Pool
 import pysam
 import numpy as np
 import sys
-from collections import OrderedDict, Counter
+from collections import OrderedDict, Counter, defaultdict
 import os
 import gzip
 
-FRAGMENT_SIZE = 100
+FRAGMENT_SIZE = 200
 
 def get_args():
     parser = ArgumentParser()
@@ -47,31 +47,56 @@ def fetch(bamf, loc):
 def chunk_to_frags(bam_with_chunk):
     bampath, contig, start, end, outgz = bam_with_chunk
     ohdl = gzip.open(outgz, mode='wt')
-    loc = ('None', 0, 0)
-    cell_umi_locus, cell_counts = OrderedDict(), Counter()
+    umi_positions = defaultdict(list)
+    lastpos, nproc = start, 1
+    cell_counts, cell_reads = Counter(), Counter()
     for read in fetch(bampath, (contig, start, end)):
-       if read.has_tag('MI'):
-           #if read.is_forward:
-           #    read_loc = (read.reference_name, read.reference_start, read.reference_start + FRAGMENT_SIZE)
-           #else:
-           #    read_loc = (read.reference_name, max(1, read.reference_end - FRAGMENT_SIZE), read.reference_end)
-           read_loc = (read.reference_name, read.reference_start, read.reference_end)
-           if read_loc[2] - read_loc[1] < 20:
-               continue
-           if loc[0] != read_loc[0] or loc[1] != read_loc[1]:
-               for (cell, loc, umi), count  in cell_umi_locus.items():
-                   ohdl.write('%s\t%d\t%d\t%s\t%d\n' % (loc[0], loc[1], loc[2], cell, count))
-               loc, cell_umi_locus = read_loc, OrderedDict()
-           umi = read.get_tag('MI')
+       if read.is_mapped and read.has_tag('MI') and (read.reference_end - read.reference_start) >= 20:
            cell = read.get_tag('CB')
-           cell_umi_locus[(cell, read_loc, umi)]  = cell_umi_locus.get((cell, read_loc, umi),0) + 1
-           cell_counts[cell] += 1
+           mi = read.get_tag('MI')
+           umi=(cell, mi)
+           umi_positions[umi].append(read.reference_start)
+           if read.reference_start > lastpos:
+               nproc += 1
+               lastpos = read.reference_start
+               if nproc >= FRAGMENT_SIZE:  # we have moved a fragment, clean the dictionary
+                   nproc = 1
+                   out_umi = list()
+                   for ukey, poslist in list(umi_positions.items()):
+                       if read.reference_start - poslist[-1] > FRAGMENT_SIZE:
+                           # it's been more than 1 fragment since we last saw this; count it
+                           frag_start = int(sum(poslist)/len(poslist))
+                           out_umi.append((contig, frag_start, frag_start + FRAGMENT_SIZE, ukey[0], len(poslist)))
+                           del umi_positions[ukey]
+                       elif read.reference_start - poslist[0] > FRAGMENT_SIZE:
+                           # weird edge case - the UMI has been seen twice with about a fragment length
+                           # difference or more; cut the position list and count it
+                           seg1, seg2 = list(), list()
+                           for p in poslist:
+                               if (p - poslist[0]) >= (poslist[-1] - p):
+                                   seg1.append(p)
+                               else:
+                                   seg2.append(p)
+                           frag_start = int(sum(seg1)/len(seg1))
+                           out_umi.append((contig, frag_start, frag_start + FRAGMENT_SIZE, umi[0], len(seg1)))
+                           umi_positions[ukey] = seg2 
+                   out_umi.sort(key=lambda k: k[1])
+                   for orec in out_umi:
+                       cell_counts[orec[-2]] += 1
+                       cell_reads[orec[-2]] += orec[-1]
+                       ohdl.write('\t'.join(map(str, orec)) + '\n')
 
-    for (cell, loc, umi), count in cell_umi_locus.items():
-        ohdl.write('%s\t%d\t%d\t%s\t%d\n' % (loc[0], loc[1], loc[2], cell, count))
+
+    for umi, poslist in list(umi_positions.items()):
+        frag_start = int(sum(poslist)/len(poslist))
+        record = (contig, frag_start, FRAGMENT_SIZE + frag_start, umi[0], len(poslist))
+        cell_counts[record[-2]] += 1
+        cell_reads[record[-2]] += record[-1]
+        ohdl.write('\t'.join(map(str, record)) + '\n')
+
 
     ohdl.close()
-    return outgz, cell_counts
+    return outgz, cell_counts, cell_reads
 
 
 def chunk_reads(bam, base_file, chunk_size):
@@ -105,21 +130,26 @@ def main(args):
     else:
         known_bcs = None
 
-    tot_counts = dict()
-    for _, ccounts in tx_chunks:
-        for cell, cnt in ccounts.items():
-            tot_counts[cell] = tot_counts.get(cell, 0) + cnt
+    tot_counts, tot_umi = dict(), dict()
+    for _, cell_umi, cell_reads in tx_chunks:
+        for cell, cnt in cell_umi.items():
+            tot_counts[cell] = tot_counts.get(cell, 0) + cell_reads[cell]
+            tot_umi[cell] = tot_umi.get(cell, 0) + cnt
 
-    valid_bcs = {k for k, v in tot_counts.items() if v >= args.min_count}
-    if known_bcs is not None:
-        valid_bcs = valid_bcs & known_bcs
+    nr = sum(tot_counts.values())
+    nu = sum(tot_umi.values())
+    print('%s: Counted %d aligned, barcoded reads supporting %d umi (efficiency %.1f%%)' % (args.bam, nr, nu, 100*nu/nr))
 
-    print("Reduced %d observed barcodes to %d filtered" % (len(tot_counts), len(valid_bcs)))
+    valid_bcs = {k for k, v in tot_umi.items() if v >= args.min_count}
+    if known_bcs is not None or args.min_count > 1:
+        valid_bcs = valid_bcs & (known_bcs or valid_bcs)
+        print("Reduced %d observed barcodes to %d filtered" % (len(tot_counts), len(valid_bcs)))
+
 
     rmlist=list()
 
     hdl = gzip.open(args.tsvgz, 'wt') 
-    for f_chunk, _ in tx_chunks:
+    for f_chunk, _, _ in tx_chunks:
         in_ = gzip.open(f_chunk, 'rt')
         for line_ in in_:
             fields = line_.strip().split('\t')

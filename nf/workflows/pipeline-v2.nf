@@ -144,7 +144,9 @@ def inner_join(ch_a, ch_b) {
 
 workflow {
   // # note: params.SAMPLE_DIGEST is used implicitly here
+  //pair_ch.subscribe{ println(it) }
   split_fqs = process_pairedtag(pair_ch.map{ it -> tuple(it[0], it[1], it[2], it[3])})
+  //split_fqs[0].subscribe{ println(it) }
   publishlogo(split_fqs[2])
   i=0
   j=0
@@ -154,6 +156,7 @@ workflow {
   fqjoin = fastq_ids.join(fastq_subfiles).map{ it -> tuple(it[1], it[2])}
   fqjoin = fqjoin.join(type_ch).map{ it -> tuple(it[0], it[2], it[1])}
   fqjoin = fqjoin.transpose()
+  // fqjoin.subscribe{println(it)}
    // this is now a tuple of (seq_id, seq_type, fastq)
   //fqjoin.map{it -> tuple(it[0], it[2])}.groupTuple().subscribe{println it}
   barcode_pdfs = barcode_qc(fqjoin.map{ it -> tuple(it[0], it[2]) }.groupTuple())

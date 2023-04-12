@@ -19,8 +19,10 @@ def main(args):
     libname = args.annot_fq[1].split('.fq')[0].split('/')[-1].split('__')[0]
     if args.output_pdf is None:
         outpdf = libname + '.barcode_qc.pdf'
+        outcsv = libname + '.barcode_qc.csv'
     else:
         outpdf = args.output_pdf
+        outcsv = args.output_pdf[:-4] + '.csv'
 
     def title(ttl):
         plt.title(ttl + '\nLibrary: %s' % libname)
@@ -77,6 +79,7 @@ def main(args):
     str_A = 'assigned (%.1f%%)' % (100 * (1-r_unassign)) 
     str_U = 'unassigned (%.1f%%)' % (100 * r_unassign)
     records.loc[:, 'assignment'] = records.sample_cell.map(lambda x: str_U if '*' in x else str_A)
+    records.to_csv(outcsv, index=False)
     acounts = records.groupby('assignment')['reads'].sum().reset_index()
     pdf = PdfPages(outpdf)
     plt.bar(acounts.assignment, acounts.reads)

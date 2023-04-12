@@ -107,6 +107,7 @@ def annotate_reads_(args):
 def build_sample_fq_map(manifest_f, assay_ids, this_seq_id):
     reader = DictReader(open(manifest_f), delimiter=',')
     records = {r['assay_info']: r for r in reader if r['sequence_id'] == this_seq_id}
+    print(records)
     fqs = dict()
     for aid in assay_ids:
         rec = records[aid]
@@ -130,27 +131,31 @@ def main(args):
     sample_fq_map['*'] = '%s_UNK__UNK__UNK__UNK_unmatched__1.fq' % args.library_id
     handle_map, gz_procs = dict(), list()
     for sm, fq in sample_fq_map.items():
+        print('Creating %s for streaming %s' % (fq, sm))
         os.mkfifo(fq)
         p = subprocess.Popen('cat %s | gzip -c > %s/%s.gz' % (fq, base, fq), shell=True)
         gz_procs.append(p)
-        handle_map[sm] = io.open(fq, 'wt')
+        handle_map[sm] = (io.open(fq, 'wt'), fq)
 
     from contextlib import closing
     with closing(Pool(args.threads, maxtasksperchild=1)) as pool:
         chunk_iter = pool.imap_unordered(annotate_reads_, annot_args)
         for i, read_chunk in enumerate(chunk_iter):
             for sample_id, record in read_chunk:
-                handle_map[sample_id].write('@' + record.name + '\n')
-                handle_map[sample_id].write(record.seq + '\n')
-                handle_map[sample_id].write('+\n')
-                handle_map[sample_id].write(record.qual + '\n')
+                handle_map[sample_id][0].write('@' + record.name + '\n')
+                handle_map[sample_id][0].write(record.seq + '\n')
+                handle_map[sample_id][0].write('+\n')
+                handle_map[sample_id][0].write(record.qual + '\n')
     
-    for sample_id, handle in handle_map.items():
+    for sample_id, (handle, _) in handle_map.items():
         handle.close()
 
     for proc in gz_procs:
         _ = proc.communicate()
 
+    for sample_id, (_, file_) in handle_map.items():
+        print('Closing %s' % file_)
+        os.system('rm %s' % file_) 
 
 
 if __name__ == '__main__':
