@@ -345,13 +345,15 @@ process bam_to_frag {
   output:
     file fragment_file
     file fragment_index
+    file fragment_log
 
   script:
     fragment_file = (bam_file.toString() - '.bam') + '.frag.tsv.gz'
     fragment_index = fragment_file + '.tbi'
+    fragment_log = fragment_file + '.log'
     """
     samtools index $bam_file
-    python $params.HOME_REPO/py/bam2frag.py $bam_file $fragment_file --ncores $params.fragment_ncore
+    python $params.HOME_REPO/py/bam2frag.py $bam_file $fragment_file --ncores $params.fragment_ncore | tee $fragment_log
     zcat $fragment_file | bedtools sort -i /dev/stdin | bgzip -c > ${fragment_file}.tmp
     mv ${fragment_file}.tmp ${fragment_file}
     tabix -p bed $fragment_file
@@ -360,6 +362,7 @@ process bam_to_frag {
    stub:
      fragment_file = (bam_file.toString() - '.bam') + '.frag.tsv.gz'
      fragment_index = fragment_file + '.tbi'
+     fragment_log = fragment_file + '.log'
      """
      touch $fragment_file $fragment_index
      """

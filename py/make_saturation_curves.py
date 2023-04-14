@@ -9,6 +9,7 @@ from multiprocessing import Pool
 from collections import Counter
 from csv import DictReader
 import os
+import PyPDF2 as pypdf
 
 READ_PROFILES = np.hstack([np.arange(0.0025, 1, 1/75), [1]])  # 75 points; plus [1]
 
@@ -146,10 +147,11 @@ def main(args):
     print(records.head().to_string())
     records.to_csv(args.pipeline_dir + '/' + args.prefix + '.csv', index=False)
 
-    postprocess_efficiency(records, args.pipeline_dir + '/' + args.prefix, USE_=args.efficiency_factor)
+    postprocess_efficiency(records, args.pipeline_dir,
+            args.pipeline_dir + '/' + args.prefix, USE_=args.efficiency_factor)
 
 
-def postprocess_efficiency(erecords, outbase, USE_='R2A'):
+def postprocess_efficiency(erecords, pipeline_dir, outbase, USE_='R2A'):
     DCOLS = ['#2f4f4f',
              '#8b4513',
              '#228b22',
@@ -243,6 +245,17 @@ def postprocess_efficiency(erecords, outbase, USE_='R2A'):
     
     from matplotlib.backends.backend_pdf import PdfPages
     with PdfPages(outbase + '_efficiency_plots.pdf') as pdf:
+        fig, ax = plt.subplots()
+        xbar = np.arange(lysis_records.shape[0])
+        ax.bar(xbar - 0.2, lysis_records.rna_barcode_efficiency.map(lambda s: float(s.strip('%'))), color='#7F0000', width=0.4)
+        ax.bar(xbar + 0.2, lysis_records.dna_barcode_efficiency.map(lambda s: float(s.strip('%'))), color='#2f4f4f', width=0.4)
+        ax.legend(labels=['RNA', 'DNA'])
+        ax.set_xticks(xbar, lysis_records.lysis_id)
+        ax.set_ylabel('Barcode Efficiency (%)')
+        ax.set_xlabel('Library')
+        pdf.savefig(fig)
+        plt.close()
+
         xlim = (combined_info.reads.min(), combined_info.reads.max())
         ylim = (combined_info.umi.min(), combined_info.umi.max())
         fig, ax = plt.subplots()
@@ -277,7 +290,42 @@ def postprocess_efficiency(erecords, outbase, USE_='R2A'):
         ax.set_xscale('log')
         pdf.savefig(fig)
         plt.close()
-    
+
+        fig, ax = plt.subplots()
+        xbar = np.arange(lysis_records.shape[0])
+        ax.bar(xbar - 0.2, lysis_records.rna_effective_library_size.map(lambda s: int(s.lstrip('<').strip('M'))), color='#7F0000', width=0.4)
+        ax.bar(xbar + 0.2, lysis_records.dna_effective_library_size.map(lambda s: int(s.lstrip('<').strip('M'))), color='#2f4f4f', width=0.4)
+        ax.legend(labels=['RNA', 'DNA'])
+        ax.set_xticks(xbar, lysis_records.lysis_id)
+        ax.set_ylabel('Estimated Library Size\n(Million UMI)')
+        ax.set_xlabel('Library')
+        pdf.savefig()
+        plt.close()
+   
+        fig, ax = plt.subplots()
+        xbar = np.arange(lysis_records.shape[0])
+        ax.bar(xbar - 0.2, lysis_records.rna_reads_to_target.map(lambda s: int(s.lstrip('<').strip('M'))), color='#7F0000', width=0.4)
+        ax.bar(xbar + 0.2, lysis_records.dna_reads_to_target.map(lambda s: int(s.lstrip('<').strip('M'))), color='#2f4f4f', width=0.4)
+        ax.legend(labels=['RNA', 'DNA'])
+        ax.set_xticks(xbar, lysis_records.lysis_id)
+        ax.set_ylabel('Reads to Saturation (M)')
+        ax.set_xlabel('Library')
+        pdf.savefig()
+        plt.close()
+
+
+    out_comb = outbase + '.combined_report.pdf'
+    merger = pypdf.PdfMerger()
+    qcs = [pipeline_dir + '/' + x for x in os.listdir(pipeline_dir) if 
+            x.endswith('.pdf') and ('h5adqc' in x or 'antibodyQC' in x or 'efficiency_plots' in x)]
+    qcs = sorted(qcs)
+    for pdf in qcs:
+        print(pdf)
+        merger.append(open(pdf, 'rb'))
+    with open(out_comb, 'wb') as pout:
+        merger.write(pout)
+    merger.close()
+
 
 
 if __name__ == '__main__':

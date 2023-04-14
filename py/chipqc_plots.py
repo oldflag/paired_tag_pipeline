@@ -92,14 +92,18 @@ with PdfPages(args.out_pdf) as pdf:
     plt.xlabel('Total Reads'); plt.ylabel('Total UMI'); plt.title('Reads and UMI (per cell)\nAll libraries')
     plt.gca().set_yscale('log')
     plt.gca().set_xscale('log')
-    plt.gca().set_rasterized(True);plt.savefig(pdf, format='pdf', dpi=250);plt.close()
+    plt.gca().set_rasterized(True)
+    #plt.savefig(pdf, format='pdf', dpi=250)
+    plt.close()
     plt.figure()
     print(' .. .. umi vs reads/umi')
     plt.scatter(cell_stats.total_umi, cell_stats.reads_per_umi, marker='.')
     plt.xlabel('Total UMI'); plt.ylabel('Reads per UMI'); plt.title('Reads per UMI by Total UMI (per cell)\nAll libraries')
     plt.gca().set_yscale('log')
     plt.gca().set_xscale('log')
-    plt.gca().set_rasterized(True);plt.savefig(pdf, format='pdf', dpi=250);plt.close()
+    plt.gca().set_rasterized(True)
+    #plt.savefig(pdf, format='pdf', dpi=250)
+    plt.close()
     plt.figure()
     print(' .. .. umi vs reads/umi (colored)')
     # pass 1: compute the mean reads / umi
@@ -121,12 +125,17 @@ with PdfPages(args.out_pdf) as pdf:
     plt.gca().set_xscale('log')
     plt.legend(bbox_to_anchor=(1,1.00))
     plt.tight_layout()
-    plt.gca().set_rasterized(True);plt.savefig(pdf, format='pdf', dpi=250);plt.close()
+    plt.gca().set_rasterized(True)
+    #plt.savefig(pdf, format='pdf', dpi=250)
+    plt.close()
     plt.figure(figsize=(12,8))
     print(' .. .. reads per umi : assay boxplot')
     print(cell_stats.head())
     sbn.boxplot(x='assay', y='reads_per_umi', hue='library', data=cell_stats[cell_stats.total_umi >= 100])
-    plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250);plt.close()
+    plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True)
+    #plt.savefig(pdf,format='pdf',dpi=250)
+    plt.close()
+    
     plt.figure(figsize=(8,6))
     cell_stats.loc[:,'umi_per_read'] = 1/cell_stats.reads_per_umi
     cell_stats.loc[:,'total_reads_log'] = np.log10(cell_stats.total_reads)
@@ -134,23 +143,35 @@ with PdfPages(args.out_pdf) as pdf:
     sbn.lmplot(x='total_reads_log', y='umi_per_read', hue='library',
                data=cell_stats)
     plt.xlabel('Total Reads (log10)'); plt.ylabel('UMI per Read')
-    plt.gca().set_rasterized(True);plt.savefig(pdf, format='pdf', dpi=250);plt.close()
+    plt.gca().set_rasterized(True)
+    #plt.savefig(pdf, format='pdf', dpi=250)
+    plt.close()
+    
     plt.figure(figsize=(12,8))
     sbn.lmplot(x='total_umi_log', y='umi_per_read', hue='library',
                data=cell_stats)
     plt.xlabel('Total UMI (log10)'); plt.ylabel('UMI per Read')
-    plt.gca().set_rasterized(True);plt.savefig(pdf, format='pdf', dpi=250);plt.close()
+    plt.gca().set_rasterized(True)
+    #plt.savefig(pdf, format='pdf', dpi=250)
+    plt.close()
+    
     plt.figure(figsize=(8,6))
     print('.. .. total umi per cell, violin')
     sbn.violinplot(x='assay', y='total_umi', hue='library', data=cell_stats)
     plt.legend(bbox_to_anchor=(1.04,1))
-    plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250);plt.close()
+    plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True)
+    #plt.savefig(pdf,format='pdf',dpi=250)
+    plt.close()
+    
     plt.figure(figsize=(12,8))
     print('.. .. total umi per cell, boxplot')
     cell_stats.loc[:, 'total_umi_log10'] = np.log10(cell_stats.total_umi)
     sbn.boxplot(x='assay', y='total_umi_log10', hue='library', data=cell_stats)
     plt.legend(bbox_to_anchor=(1, 1.04))
-    plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250);plt.close()
+    plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True)
+    #plt.savefig(pdf,format='pdf',dpi=250)
+    plt.close()
+    
     print('.. .. swarmplot by library')
     for lib in cell_stats.library.unique():
         dat = cell_stats[cell_stats.library == lib]
@@ -163,7 +184,9 @@ with PdfPages(args.out_pdf) as pdf:
         plt.figure(figsize=(12,8))
         sbn.swarmplot(x='assay', y='total_umi_log10', data=dat)
         plt.title('Cell UMI for library %s' % lib)
-        plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250);plt.close()
+        plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True)
+        #plt.savefig(pdf,format='pdf',dpi=250)
+        plt.close()
         plt.figure()
     
     cell_stats.loc[:, 'enhancer_rate'] = cell_stats.retained_in_enhancer_umi / cell_stats.total_umi
@@ -183,7 +206,9 @@ with PdfPages(args.out_pdf) as pdf:
     plt.ylabel('Promoter Rate (ENCODE PLS UMI / total)');
     plt.title('Enhancer / Promoter rates (all libraries)');
     plt.legend();
-    plt.gca().set_rasterized(True);plt.savefig(pdf, format='pdf', dpi=250);plt.close()
+    plt.gca().set_rasterized(True)
+    #plt.savefig(pdf, format='pdf', dpi=250)
+    plt.close()
    
     print('.. library swarms ..') 
     for lib in cell_stats.library.unique():
@@ -195,21 +220,26 @@ with PdfPages(args.out_pdf) as pdf:
         plt.figure(figsize=(12,8))
         sbn.swarmplot(x='assay', y='CRE_rate', hue='antibody', data=dat)
         plt.title('Rate of UMI in ENCODE-defined CRE\n(Library %s)' % lib)
-        plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250);plt.close()
+        plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True)
+        #plt.savefig(pdf,format='pdf',dpi=250)
+        plt.close()
         plt.figure(figsize=(12,8))
         sbn.swarmplot(x='assay', y='genic_rate', hue='antibody', data=dat)
         plt.title('Rate of UMI in genic regions\n(Library %s)' % lib)
-        plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250)
+        plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True)
+        #plt.savefig(pdf,format='pdf',dpi=250)
+        plt.close()
     
    
     print(' .. antibody scatters ..') 
     # make colors for the antibodies
     plotted=False
+    plt.figure()
     for i, library in enumerate(cell_stats.library.unique()):
         if (i % len(MARKER_MAP)) == 0:
             if plotted:
                 plt.legend(bbox_to_anchor=(1.04,1.04))
-                pdf.savefig()
+                #pdf.savefig()
                 plotted = False
         dat = cell_stats[cell_stats.library == library]
         for j, ab in enumerate(dat.antibody.unique()):
@@ -225,7 +255,8 @@ with PdfPages(args.out_pdf) as pdf:
     
     if plotted:
         plt.legend(bbox_to_anchor=(1.04,1.04))
-        pdf.savefig()
+        #pdf.savefig()
+        plt.close()
         
     print('.. computing sample stats ..') 
     sample_dat = unmelt(chip_sample_qc,
@@ -241,27 +272,26 @@ with PdfPages(args.out_pdf) as pdf:
     sbn.barplot(x='sample', y='HQ_umi_total', hue='antibody', data=sample_dat)
     plt.legend(bbox_to_anchor=(1.04,1.04))
     plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250)
-    pdf.savefig()
+    
     plt.figure(figsize=(12,8))
     sbn.barplot(x='sample', y='HQ_umi_median', hue='antibody', data=sample_dat)
     plt.legend(bbox_to_anchor=(1.04,1.04))
     plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250)
-    pdf.savefig()
+    
     plt.figure(figsize=(12,8))
     sbn.barplot(x='sample', y='umi_CRE_rate_median', hue='antibody', data=sample_dat)
     plt.legend(bbox_to_anchor=(1.04,1.04))
     plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250)
-    pdf.savefig()
+    
     plt.figure(figsize=(12,8))
     sbn.barplot(x='sample', y='umi_genic_rate_median', hue='antibody', data=sample_dat)
     plt.legend(bbox_to_anchor=(1.04,1.04))
     plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250)
-    pdf.savefig()
+    
     plt.figure(figsize=(12,8))
     sbn.barplot(x='sample', y='enhancer_promoter_ratio_total', hue='antibody', data=sample_dat)
     plt.legend(bbox_to_anchor=(1.04,1.04));
     plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250)
-    pdf.savefig()
 
     sample_dat.to_csv(args.out_pdf[:-4] + '_sample_stats.csv')
 
@@ -287,7 +317,8 @@ with PdfPages(args.out_pdf) as pdf:
     gp = sbn.barplot(x='library', y='reads', hue='assay', data=unm_dat)
     gp.set_yscale('log')
     plt.title('Unmatched reads')
-    plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250)
-    pdf.savefig()
+    plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True)
+    #plt.savefig(pdf,format='pdf',dpi=250)
+    #pdf.savefig()
              
         

@@ -186,8 +186,8 @@ process chip_qc {
     tuple val(chipfile_id), file(cell_stats), file(sample_stats)
 
   script:
-    cell_stats = "${chipfile_id}.chipQC_cell.txt"
-    sample_stats = "${chipfile_id}.chipQC_sample.txt"
+    cell_stats = "${chipfile_id}.antibQC_cell.txt"
+    sample_stats = "${chipfile_id}.antibQC_sample.txt"
     bam_file_lst=bam_file.join(',')
     """
     python "${params.HOME_REPO}/py/chipQC.py" "${bam_file_lst}" "${saf_file}" "${cell_stats}" --sample_out "${sample_stats}"
@@ -223,9 +223,9 @@ process merge_chip_qc {
     file chipseq_plots
 
   script:
-    chipseq_merged_sample = "${output_base}.sample_chipQC.txt"
-    chipseq_merged_cell = "${output_base}.cell_chipQC.txt"
-    chipseq_plots = "${output_base}.chipQC.pdf"
+    chipseq_merged_sample = "${output_base}.sample_abQC.txt"
+    chipseq_merged_cell = "${output_base}.cell_abQC.txt"
+    chipseq_plots = "${output_base}.antibodyQC.pdf"
     """
     hdr=0
     find . -name '*_cell.txt' > infiles

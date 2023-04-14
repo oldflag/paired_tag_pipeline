@@ -73,7 +73,7 @@ if ( params.SPECIES == "hs" ) {
     params.genome_reference = file("/home/share/storages/2T/genome/human/GRCh38.primary_assembly.genome.fa")
     params.alignment_ncore = 4
     params.fragment_ncore = 6
-    params.ramsize = 2000000000
+    params.ramsize = 5000000000
     params.star_index = file("/home/share/storages/2T/genome/human/star_index/")
     params.genome_bin_file = file("/home/share/storages/2T/genome/human/GRCh38_5kb.saf")
     params.genome_saf_file = file("/home/share/storages/2T/genome/human/gencode.v39.annotation.saf")
@@ -88,7 +88,7 @@ if ( params.SPECIES == "hs" ) {
     params.genome_reference = file("/home/share/storages/2T/genome/mouse/GRCm39.primary_assembly.genome.fa.gz")
     params.star_index = file("/home/share/storages/2T/genome/mouse/star_index/")
     params.alignment_ncore = 4 
-    params.ramsize = 2000000000 
+    params.ramsize = 5000000000 
     params.genome_bin_file = file("/home/share/storages/2T/genome/mouse/GRCm39_5kb.saf")
     params.genome_saf_file = file("/home/share/storages/2T/genome/mouse/gencode.vM28.annotation.saf")
     params.genome_gtf_collapsed_file = file("/home/share/storages/2T/genome/mouse/gencode.vM28.annotation.collapsed.gtf") 
@@ -107,7 +107,8 @@ include { process_pairedtag;
           add_tags as tag_rna; 
           add_tags as tag_dna } from params.HOME_REPO + "/nf/modules/pairedtag_reads"
 include { star_aligner_single; bwa_aligner_single
-          alignment_qc; merge_alignment_qc } from params.HOME_REPO + "/nf/modules/alignment"
+          alignment_qc; merge_alignment_qc;
+          bam_to_frag } from params.HOME_REPO + "/nf/modules/alignment"
 include { rnaseqc_call; merge_rnaseqc } from params.HOME_REPO + "/nf/modules/rnaseqc"
 include { umitools_count as rna_count; umitools_count as rna_bin_count;
           umitools_count as dna_count;
@@ -124,6 +125,7 @@ include { publishData as publishdnabam; publishData as publishrnabam;
           publishData as publishrnareadcount; publishData as publishrnaumicount; 
           publishData as publishrnabinreadcount; publishData as publishrnabinumicount;
           publishData as publishdnapeakreadcount; publishData as publishdnapeakumicount;
+          publishData as publishfragments; catAndPublish as publishlogs;
           publishData as publishlogo;
           publishData as publishrnaqc;
           publishData as publishbarcodeqc;
@@ -173,6 +175,11 @@ workflow {
   bamqc = alignment_qc(all_bams)
   alignment_qcfile = merge_alignment_qc(bamqc.map{ it -> it[1]}.collect(), params.RUN_NAME)
   publishalignmentqc(alignment_qcfile)
+
+  // fragments
+  fragfiles = bam_to_frag(dna_rawbam.map{ it -> it[1] })  // [0]: fragments [1]: index [2]: logs
+  publishfragments(fragfiles[0])
+  publishlogs(fragfiles[2].collect(), "gather_fragments.log")
 
   //rna_qc
   rnaqc = rnaseqc_call(rna_rawbam.map{it -> tuple(it[0], it[1], it[3], it[4])}, params.genome_gtf_collapsed_file)
