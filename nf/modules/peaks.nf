@@ -85,7 +85,7 @@ process MACS2_multi {
 
   output:
     tuple val(experiment_name), file(merged_peaks), file(peaks_saf), val(antibody_name)
-    file "wigs/*.bw"
+    file track_bw
 
   script:
     basename = "${experiment_name}_${antibody_name}"
@@ -95,6 +95,7 @@ process MACS2_multi {
     broad_peaks = "${basename}_peaks.broadPeak"
     merged_peaks = "${basename}_peaks_merged.bed"
     peaks_saf = "${basename}_peaks_merged.saf"
+    track_bw = "${basename}.bw"
     bamlist2 = bam_file.join(' --bam ')
     """
     # note - below will UMI-dedup and merge. This has been disabled for efficiency.
@@ -123,7 +124,8 @@ process MACS2_multi {
     while read -r bfile; do
         samtools index \$bfile
     done < bams.txt
-    BAMscale scale -k no -r unscaled -z 5 -j 5 -q 30 -o ./wigs -t 4 --bam $bamlist2
+    #BAMscale scale -k no -r unscaled -z 5 -j 5 -q 30 -o ./wigs -t 4 --bam $bamlist2
+    bash "${params.HOME_REPO}"/sh/make_tracks.bash bams.txt "${params.HOME_REPO}/py/bam2frag.py" "${track_bw}" "${params.genome_reference}.fai"
     """
     
   stub:
@@ -131,8 +133,9 @@ process MACS2_multi {
     merged_peaks = "${basename}_peaks_merged.bed"
     peaks_saf = "${basename}_peaks_merged.saf"
     wig_fs = bam_file.map{ "wig/" + it.basename() + ".wig" }
+    track_bw = "${basename}.bw"
     """
-    touch "${merged_peaks}" "${peaks_saf}" $wig_fs
+    touch "${merged_peaks}" "${peaks_saf}" "${track_bw}"
     """
     
 }
@@ -327,3 +330,4 @@ process plot_peaks_in_regions {
     done
     """
 }
+

@@ -389,7 +389,7 @@ process merge_frag_files {
 
   script:
     merged_fragments = run_name + '_fragments_allAntibodies.tsv.gz'
-    merged_fragments_idnex = merged_fragments + '.tbi'
+    merged_fragments_index = merged_fragments + '.tbi'
     """
     zcat $fragment_file | bedtools sort - /dev/stin | bgzip -c > ${merged_fragments}
     tabix -p bed ${merged_fragments}

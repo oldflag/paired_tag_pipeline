@@ -98,6 +98,7 @@ def main(args):
     seq2lys = dict()
     seq2typ = dict()
     for record in DictReader(open(args.library_digest, 'rt')):
+        print(record)
         seq2lys[record['sequence_id']] = record['lysis_id']
         seq2typ[record['sequence_id']] = record['library_type']
     assay2sample = dict()

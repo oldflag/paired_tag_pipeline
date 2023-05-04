@@ -22,7 +22,7 @@ conda {
 params.RUN_NAME="<your run name>"
 params.LIBRARY_DIGEST_FILE="<your library digest>.csv"
 params.SAMPLE_DIGEST_FILE="<your sample digest>.csv"
-params.SPECIES="mm"  // replace with "hs" for human
+params.SPECIES="mm"  // replace with "hs" for human or "rn" for rat
  
 params.output_dir="/NAS1/test_runs/" // set to your desired output directory
 params.HOME_REPO="/home/chartl/repos/pipelines/" // set to the location of the pipelines repository
@@ -119,7 +119,7 @@ include { umitools_count as rna_count; umitools_count as rna_bin_count;
 include { annotate_reads_with_features as peak_annot; umitools_count as peak_count } from params.HOME_REPO + "/nf/modules/count"
 include { h5ad_qc; cluster_qc } from params.HOME_REPO + "/nf/modules/count"
 include { merge_bams as merge_dna_bams; merge_bams as merge_rna_bams } from params.HOME_REPO + "/nf/modules/alignment"
-include { MACS2_multi; merge_saf; chip_qc; merge_chip_qc } from params.HOME_REPO + "/nf/modules/peaks"
+include { MACS2_multi; merge_saf; chip_qc; merge_chip_qc} from params.HOME_REPO + "/nf/modules/peaks"
 include { publishData as publishdnabam; publishData as publishrnabam; 
           publishData as publishdnareadcount; publishData as publishdnaumicount; 
           publishData as publishrnareadcount; publishData as publishrnaumicount; 
@@ -134,7 +134,8 @@ include { publishData as publishdnabam; publishData as publishrnabam;
           publishData as publishh5adqc;
           publishData as publishclusterqc;
           publishData as publish10xrna;
-          publishData as publish10xdna } from params.HOME_REPO + "/nf/modules/publish" 
+          publishData as publish10xdna;
+          publishData as publishtracks } from params.HOME_REPO + "/nf/modules/publish" 
 
 /* channel over rows of the digest */
 pair_ch = Channel.fromPath(params.LIBRARY_DIGEST).splitCsv(header: true, sep: ",").map{ row -> tuple(row.sequence_id, file(row.fastq1), file(row.fastq2), row.lysis_id, row.library_type)}
@@ -179,7 +180,8 @@ workflow {
   // fragments
   fragfiles = bam_to_frag(dna_rawbam.map{ it -> it[1] })  // [0]: fragments [1]: index [2]: logs
   publishfragments(fragfiles[0])
-  publishlogs(fragfiles[2].collect(), "gather_fragments.log")
+  publishlogs(fragfiles[2].collect(), "gather_convert_fragments.log")
+
 
   //rna_qc
   rnaqc = rnaseqc_call(rna_rawbam.map{it -> tuple(it[0], it[1], it[3], it[4])}, params.genome_gtf_collapsed_file)
@@ -190,11 +192,13 @@ workflow {
   // grouping by antibody - this is the 5th element of the tuple
   dna_byAB = dna_rawbam.map{ it -> tuple(it[4], it[1])}.groupTuple().map{ it -> tuple(it[0], it[1], params.RUN_NAME)}
   // peak calling per antibody and adding antibody name to peak name
+  
+  // combining all peaks for publication
   dna_peaks = MACS2_multi(dna_byAB)  // input: (antibody_name, bam_file_list, experiment_name)
   // output: (experiment, bed, saf, antibody)
-
-  // combining all peaks for publication
+  // output[1]: wig file
   merged_saf = merge_saf(dna_peaks[0].map{it -> it[2]}.collect(), "all_antibodies")
+  publishtracks(dna_peaks[1].collect())
 
 
   //filtering and tagging

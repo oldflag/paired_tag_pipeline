@@ -12,6 +12,13 @@ import gzip
 
 FRAGMENT_SIZE = 200
 
+def sd_(n,d):
+    if d == 0:
+        if n == 0:
+            return 0
+        return -1
+    return n/d
+
 def get_args():
     parser = ArgumentParser()
     parser.add_argument('bam', help='The input bam file')
@@ -19,6 +26,8 @@ def get_args():
     parser.add_argument('--ncores', help='The number of cores to use', default=1, type=int)
     parser.add_argument('--barcodes', help='Barcodes to retain', default=None)
     parser.add_argument('--min_count', help='The minimum UMI for filtered barcodes', default=0, type=int)
+    parser.add_argument('--min_frac', help='The minimum UMI fraction for filtered barcodes, overrides min_count', default=0, type=float)
+    parser.add_argument('--nocb', help='Use the read names for UMI rather than CB/MI fields', action='store_true')
 
     return parser.parse_args()
 
@@ -42,7 +51,78 @@ def fetch(bamf, loc):
         yield read
     for read in itr:
         yield read
-    
+
+
+def chunk_to_frags_unk(bam_with_chunk): 
+    bampath, contig, start, end, outgz = bam_with_chunk
+    ohdl = gzip.open(outgz, mode='wt')
+    umi_positions = defaultdict(list)
+    lastpos, nproc = start, 1
+    cell_counts, cell_reads = Counter(), Counter()
+    for read in fetch(bampath, (contig, start, end)):
+       if read.is_mapped and (read.reference_end - read.reference_start) >= 20:
+           umi = read.query_name.split('|')[-1]
+           umi_positions[umi].append(read.reference_start)
+           if read.reference_start > lastpos:
+               nproc += 1
+               lastpos = read.reference_start
+               if nproc >= FRAGMENT_SIZE:  # we have moved a fragment, clean the dictionary
+                   nproc = 1
+                   out_umi = list()
+                   for ukey, poslist in list(umi_positions.items()):
+                       if read.reference_start - poslist[-1] > FRAGMENT_SIZE:
+                           # it's been more than 1 fragment since we last saw this; count it
+                           frag_start = int(sum(poslist)/len(poslist))
+                           out_umi.append((contig, frag_start, frag_start + FRAGMENT_SIZE, ukey[0], len(poslist)))
+                           del umi_positions[ukey]
+                       elif read.reference_start - poslist[0] > FRAGMENT_SIZE:
+                           # weird edge case - the UMI has been seen twice with about a fragment length
+                           # difference or more; cut the position list and count it
+                           seg1, seg2 = list(), list()
+                           for p in poslist:
+                               if (p - poslist[0]) >= (poslist[-1] - p):
+                                   seg1.append(p)
+                               else:
+                                   seg2.append(p)
+                           frag_start = int(sum(seg1)/len(seg1))
+                           out_umi.append((contig, frag_start, frag_start + FRAGMENT_SIZE, umi[0], len(seg1)))
+                           umi_positions[ukey] = seg2 
+                   out_umi.sort(key=lambda k: k[1])
+                   for orec in out_umi:
+                       cell_counts[orec[-2]] += 1
+                       cell_reads[orec[-2]] += orec[-1]
+                       ohdl.write('\t'.join(map(str, orec)) + '\n')
+
+
+    for umi, poslist in list(umi_positions.items()):
+        frag_start = int(sum(poslist)/len(poslist))
+        record = (contig, frag_start, FRAGMENT_SIZE + frag_start, umi[0], len(poslist))
+        cell_counts[record[-2]] += 1
+        cell_reads[record[-2]] += record[-1]
+        ohdl.write('\t'.join(map(str, record)) + '\n')
+
+
+    ohdl.close()
+    return outgz, cell_counts, cell_reads
+
+
+def chunk_reads(bam, base_file, chunk_size):
+    hdl = pysam.AlignmentFile(bam)
+    contigs = hdl.references
+    lens = hdl.lengths
+    hdl.close()
+
+    for contig, length in zip(contigs, lens):
+        breaks = [x for x in np.arange(start=0, stop=length, step=chunk_size)] + [length]
+        starts = breaks[:-1]
+        ends = breaks[1:]
+        for start, end in zip(starts, ends):
+            if start >= end:
+                print('bad: %s:%d-%d' % (contig, start, end))
+                continue
+            of = base_file[:-len('.tsv.gz')] + '_{}_{}_{}.tsv.gz'.format(contig, start, end)
+            yield (bam, contig, start, end, of)
+
 
 def chunk_to_frags(bam_with_chunk):
     bampath, contig, start, end, outgz = bam_with_chunk
@@ -118,12 +198,19 @@ def chunk_reads(bam, base_file, chunk_size):
 
 
 def main(args):
+    if not os.path.exists(args.bam + '.bai'):
+        print('Indexing bam file ' + args.bam)
+        os.system('samtools index ' + args.bam)
     chunk_iter = chunk_reads(args.bam, args.tsvgz, 250000000) # 250M bp/chunk
+    if 'UNK' in args.bam or args.nocb:
+        frag_fx = chunk_to_frags_unk
+    else:
+        frag_fx = chunk_to_frags
     if args.ncores > 1:
         pool = Pool(args.ncores)
-        tx_chunks = pool.map(chunk_to_frags, chunk_iter)
+        tx_chunks = pool.map(frag_fx, chunk_iter)
     else:
-        tx_chunks = map(chunk_to_frags, chunk_iter)
+        tx_chunks = list(map(frag_fx, chunk_iter))
 
     if args.barcodes is not None:
         known_bcs = {x.strip() for x in open(args.barcodes)}
@@ -138,25 +225,30 @@ def main(args):
 
     nr = sum(tot_counts.values())
     nu = sum(tot_umi.values())
-    print('%s: Counted %d aligned, barcoded reads supporting %d umi (efficiency %.1f%%)' % (args.bam, nr, nu, 100*nu/nr))
+    print('%s: Counted %d aligned, barcoded reads supporting %d umi (efficiency %.1f%%)' % (args.bam, nr, nu, 100*sd_(nu,nr)))
+    if args.min_frac > 0:
+        args.min_count = args.min_frac * nu
 
     valid_bcs = {k for k, v in tot_umi.items() if v >= args.min_count}
     if known_bcs is not None or args.min_count > 1:
         valid_bcs = valid_bcs & (known_bcs or valid_bcs)
-        print("Reduced %d observed barcodes to %d filtered" % (len(tot_counts), len(valid_bcs)))
+        sr = sum((tot_counts[b] for b in valid_bcs))
+        su = sum((tot_umi[b] for b in valid_bcs))
+        print('%s: Counted %d reads in %d barcodes for %d umi (%.1f%%); Filtered %d reads in %d barcodes for %d umi (%.1f%%)' % (
+           args.bam, nr, len(tot_counts), nu, 100*sd_(nu,nr), sr, len(valid_bcs), su, 100*sd_(su,sr)))
 
 
     rmlist=list()
 
     hdl = gzip.open(args.tsvgz, 'wt') 
     for f_chunk, _, _ in tx_chunks:
+        rmlist.append(f_chunk)
         in_ = gzip.open(f_chunk, 'rt')
         for line_ in in_:
             fields = line_.strip().split('\t')
             if fields[3] in valid_bcs:
                 hdl.write(line_)
         in_.close()
-        rmlist.append(f_chunk)
     hdl.close()
 
     os.system('rm %s' % ' '.join(rmlist))

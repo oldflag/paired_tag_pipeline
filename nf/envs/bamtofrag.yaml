@@ -10,4 +10,6 @@ dependencies:
   - bedtools
   - tabix
   - numpy
+  - bedtools
+  - ucsc-bedgraphtobigwig
 prefix: /home/app.dev1/anaconda3/envs/bamtofrag

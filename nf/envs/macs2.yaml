@@ -11,4 +11,5 @@ dependencies:
   - numpy=1.22
   - bedtools
   - BAMscale
+  - ucsc-bedgraphtobigwig
 prefix: /home/app.dev1/anaconda3/envs/macs2
