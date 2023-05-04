@@ -62,7 +62,7 @@ params.trim_qual = 20
 
 // parameters of R2 parsing
 params.linker_file = file(params.HOME_REPO + "/config/linkers.fa")
-params.combin_barcodes = file(params.HOME_REPO + "/config/well_barcode_8bp.fa")
+params.combin_barcodes = file(params.HOME_REPO + "/config/well_barcode_v2_8bp.fa")
 params.sample_barcodes = params.SAMPLE_DIGEST
 params.umi_len = 10
 params.r2_parse_threads = 2
