@@ -57,7 +57,7 @@ process MACS2_peakcall {
         mv \$this_bw $filt_wig
     else
         this_bw="${filt_bam}.empty.bw"
-        touch "${this_bw}"
+        touch "\${this_bw}"
     fi
     rm "${filt_bam}"
     """

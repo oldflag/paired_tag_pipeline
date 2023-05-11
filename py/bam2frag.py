@@ -60,7 +60,7 @@ def chunk_to_frags_unk(bam_with_chunk):
     lastpos, nproc = start, 1
     cell_counts, cell_reads = Counter(), Counter()
     for read in fetch(bampath, (contig, start, end)):
-       if read.is_mapped and (read.reference_end - read.reference_start) >= 20:
+       if read.is_mapped and (read.reference_end - read.reference_start) >= 20 and read.mapping_quality > 0:
            umi = read.query_name.split('|')[-1]
            umi_positions[umi].append(read.reference_start)
            if read.reference_start > lastpos:
@@ -240,7 +240,8 @@ def main(args):
 
     rmlist=list()
 
-    hdl = gzip.open(args.tsvgz, 'wt') 
+    outf = args.tsvgz[:-3]  # no .gz
+    hdl = open(outf, 'wt')
     for f_chunk, _, _ in tx_chunks:
         rmlist.append(f_chunk)
         in_ = gzip.open(f_chunk, 'rt')
@@ -251,6 +252,11 @@ def main(args):
         in_.close()
     hdl.close()
 
+    os.system('bedtools sort -i %s > %s.sorted' % (outf, outf))
+    os.system('cat %s.sorted | bgzip -c > %s' % (outf, args.tsvgz))
+    os.system('tabix -0 -s 1 -b 2 -e 3 %s' % args.tsvgz)
+
+    rmlist += [outf, outf+'.sorted']
     os.system('rm %s' % ' '.join(rmlist))
 
 

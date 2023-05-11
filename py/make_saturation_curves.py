@@ -98,18 +98,19 @@ def main(args):
     seq2lys = dict()
     seq2typ = dict()
     for record in DictReader(open(args.library_digest, 'rt')):
-        print(record)
         seq2lys[record['sequence_id']] = record['lysis_id']
         seq2typ[record['sequence_id']] = record['library_type']
     assay2sample = dict()
     for record in DictReader(open(args.sample_digest, 'rt')):
         assay2sample[record['assay_info']] = record['sample_id']
     bam_files = [args.pipeline_dir + '/' + x for x in os.listdir(args.pipeline_dir) if x.endswith('.bam')]
-    print(bam_files)
     sat_args = [(bam, READ_PROFILES) for bam in bam_files]
-    pool = Pool(args.threads)
-    coverages = pool.map(lib_saturation_, sat_args)
-    pool.close()
+    if args.threads > 1:
+        pool = Pool(args.threads)
+        coverages = pool.map(lib_saturation_, sat_args)
+        pool.close()
+    else:
+        coverages = list(map(lib_saturation_, sat_args))
     records = list()
     for bam, (nread, dread, aread, numi, dumi, bumi) in zip(bam_files, coverages):
         bam_name = bam.split('/')[-1]
@@ -145,7 +146,6 @@ def main(args):
                 'background_rate': bu/du
             })
     records = pd.DataFrame.from_records(records)
-    print(records.head().to_string())
     records.to_csv(args.pipeline_dir + '/' + args.prefix + '.csv', index=False)
 
     postprocess_efficiency(records, args.pipeline_dir,

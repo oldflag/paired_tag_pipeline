@@ -38,7 +38,7 @@ process annotate_reads_with_features {
       --Rpath fc_out \
       -a "${annotation_file}" \
       -o "${count_file}" \
-      "${bam_file}" 2>&1 > "${fc_log}"
+      "${bam_file}" ${params.FC_ARGS} 2>&1 > "${fc_log}"
 
     samtools sort -n "fc_out/${bamname}.bam.featureCounts.bam" > tmp.bam
     samtools sort tmp.bam > "${annot_bam}"
@@ -147,11 +147,11 @@ process simple_feature_count {
     """
     mkdir -p fc_out
     featureCounts -F "${annotation_type}" \
-      -O -Q 0 \
+      -O -Q 30 \
       -T "${params.count_ncores}" \
       --verbose --Rpath fc_out \
       -a "${annotation_file}" -o "${count_file}" \
-      "${bam_file}" 2>&1 > "${fc_log}"
+      "${bam_file}" ${params.FC_ARGS} 2>&1 > "${fc_log}"
 
       """
 
@@ -187,26 +187,26 @@ process annotate_multiple_features {
     """
     mkdir -p fc_out
     featureCounts -F "${annotation_type1}" \
-      -O -Q 0 \
+      -O -Q 30 \
       -T "${params.count_ncores}" \
       --verbose -R BAM \
       --Rpath fc_out \
       -a "${annotation_file1}" \
       -o "${count_file1}" \
-      "${bam_file}" 2>&1 > "${fc_log}"
+      "${bam_file}" ${params.FC_ARGS} 2>&1 > "${fc_log}"
 
     samtools sort -n "fc_out/${bamname}.bam.featureCounts.bam" > tmp.bam
     samtools sort tmp.bam > "${annot_bam1}"
     rm "fc_out/${bamname}.bam.featureCounts.bam" tmp.bam
 
     featureCounts -F "${annotation_type2}" \
-      -O -Q 0 \
+      -O -Q 30 \
       -T "${params.count_ncores}" \
       --verbose -R BAM \
       --Rpath fc_out \
       -a "${annotation_file2}" \
       -o "${count_file2}" \
-      "${bam_file}" 2>&1 >> "${fc_log}"
+      "${bam_file}" ${params.FC_ARGS} 2>&1 >> "${fc_log}"
 
     samtools sort -n "fc_out/${bamname}.bam.featureCounts.bam" > tmp.bam 
     samtools sort tmp.bam > "${annot_bam2}"
