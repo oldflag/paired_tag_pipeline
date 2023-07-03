@@ -131,10 +131,13 @@ with PdfPages(args.out_pdf) as pdf:
     plt.figure(figsize=(12,8))
     print(' .. .. reads per umi : assay boxplot')
     print(cell_stats.head())
-    sbn.boxplot(x='assay', y='reads_per_umi', hue='library', data=cell_stats[cell_stats.total_umi >= 100])
-    plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True)
-    #plt.savefig(pdf,format='pdf',dpi=250)
-    plt.close()
+    try:
+      sbn.boxplot(x='assay', y='reads_per_umi', hue='library', data=cell_stats[cell_stats.total_umi >= 100])
+      plt.xticks(rotation=90);plt.tight_layout();plt.gca().set_rasterized(True)
+      #plt.savefig(pdf,format='pdf',dpi=250)
+      plt.close()
+    except:
+      pass
     
     plt.figure(figsize=(8,6))
     cell_stats.loc[:,'umi_per_read'] = 1/cell_stats.reads_per_umi

@@ -636,6 +636,8 @@ def select_cells(anndata, fallback_dna_umi=350, fallback_rna_umi=350, fallback_o
     The input anndata object with a new `keep_cell_` column
     """
     print('Selecting cells...')
+    print(anndata.shape)
+    print(anndata.obs.head())
     anndata.obs.loc[:, 'keep_cell_'] = False  # set all to false (to generate the column)
     for lysis_id in anndata.obs.lysis_id.unique():
         for assay_info in anndata.obs.assay_info.unique():

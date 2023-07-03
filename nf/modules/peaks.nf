@@ -82,6 +82,7 @@ process MACS2_multi {
 
   input:
     tuple val(antibody_name), file(bam_file), val(experiment_name)
+    val genome_type
 
   output:
     tuple val(experiment_name), file(merged_peaks), file(peaks_saf), val(antibody_name)
@@ -97,15 +98,16 @@ process MACS2_multi {
     peaks_saf = "${basename}_peaks_merged.saf"
     track_bw = "${basename}.bw"
     bamlist2 = bam_file.join(' --bam ')
+    genome_ref = params.genome_reference[genome_type]
     """
     # note - below will UMI-dedup and merge. This has been disabled for efficiency.
     #echo "${bamlist}" > bamlist.txt
     #python "${params.HOME_REPO}"/py/macs2_merge.py bamlist.txt > "${filt_bam}"
     
     macs2 callpeak -t $bamlist -n "${basename}" --outdir . \
-       -q 0.1 -g "${params.macs_genome_type}" --nomodel
+       -q 0.1 -g "${genome_type}" --nomodel
     macs2 callpeak -t $bamlist --broad -n "${basename}" --outdir . \
-       -q 0.1 -g "${params.macs_genome_type}" --nomodel
+       -q 0.1 -g "${genome_type}" --nomodel
 
     cat "${narrow_peaks}" "${broad_peaks}" | cut -f1-5 | bedtools sort -i /dev/stdin | bedtools merge -i /dev/stdin > "${merged_peaks}"
     echo "GeneID	Chr	Start	End	Strand" > "${peaks_saf}"
@@ -113,7 +115,7 @@ process MACS2_multi {
       nl=\$(cat ${peaks_saf} | wc -l)
       if [ "\${nl}" -eq "1" ]; then
           # just the header
-          if [ "${params.macs_genome_type}" -eq "hs" ]; then
+          if [ "${genome_type}" -eq "hs" ]; then
               echo "nopeak	1	15000000	16000000	." >> ${peaks_saf}
           else
               echo "nopeak	chr1	15000000	16000000	." >> ${peaks_saf}
@@ -125,14 +127,13 @@ process MACS2_multi {
         samtools index \$bfile
     done < bams.txt
     #BAMscale scale -k no -r unscaled -z 5 -j 5 -q 30 -o ./wigs -t 4 --bam $bamlist2
-    bash "${params.HOME_REPO}"/sh/make_tracks.bash bams.txt "${params.HOME_REPO}/py/bam2frag.py" "${track_bw}" "${params.genome_reference}.fai"
+    bash "${params.HOME_REPO}"/sh/make_tracks.bash bams.txt "${params.HOME_REPO}/py/bam2frag.py" "${track_bw}" "${genome_ref}.fai"
     """
     
   stub:
     basename = "${experiment_name}_${antibody_name}"
     merged_peaks = "${basename}_peaks_merged.bed"
     peaks_saf = "${basename}_peaks_merged.saf"
-    wig_fs = bam_file.map{ "wig/" + it.basename() + ".wig" }
     track_bw = "${basename}.bw"
     """
     touch "${merged_peaks}" "${peaks_saf}" "${track_bw}"
@@ -191,9 +192,10 @@ process chip_qc {
   script:
     cell_stats = "${chipfile_id}.antibQC_cell.txt"
     sample_stats = "${chipfile_id}.antibQC_sample.txt"
-    bam_file_lst=bam_file.join(',')
     """
-    python "${params.HOME_REPO}/py/chipQC.py" "${bam_file_lst}" "${saf_file}" "${cell_stats}" --sample_out "${sample_stats}"
+    samtools view -F 4 -h -b "${bam_file}" > mapped.bam
+    python "${params.HOME_REPO}/py/chipQC.py" mapped.bam "${saf_file}" "${cell_stats}" --sample_out "${sample_stats}"
+    rm mapped.bam
     """
 
   stub:

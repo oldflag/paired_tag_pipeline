@@ -161,6 +161,7 @@ process trimming_bwa {
     """ 
 
  } 
+
 /*
  * This process defines a mechanism for aligning genomic dna
  * with bwa
@@ -346,26 +347,38 @@ process bam_to_frag {
     file fragment_file
     file fragment_index
     file fragment_log
+    file wig_track
+    file fragsize_hist
 
   script:
     fragment_file = (bam_file.toString() - '.bam') + '.frag.tsv.gz'
     fragment_index = fragment_file + '.tbi'
     fragment_log = fragment_file + '.log'
+    fragsize_hist = (bam_file.toString() - '.bam') + '.fragsize_hist.txt'
+    wig_track = (bam_file.toString() - '.bam') + '.bw'
     """
     samtools index $bam_file
-    python $params.HOME_REPO/py/bam2frag.py $bam_file $fragment_file --ncores $params.fragment_ncore | tee $fragment_log
+    samtools view -H $bam_file | grep @SQ | sed 's/@SQ\tSN://g' | sed 's/LN://g' > genome.txt
+    python $params.HOME_REPO/py/bam2frag.py $bam_file $fragment_file --ncores $params.fragment_ncore --nocb | tee $fragment_log
     zcat $fragment_file | bedtools sort -i /dev/stdin | bgzip -c > ${fragment_file}.tmp
     mv ${fragment_file}.tmp ${fragment_file}
-    tabix -p bed $fragment_file
+    zcat "${fragment_file}" | awk '{print \$1"\t"\$2"\t"\$3"\t"\$4"\t.\t."}' > unsorted.bed
+    bedtools sort -i unsorted.bed > sorted.bed
+    bedtools genomecov -i sorted.bed -g genome.txt -bg > coverage.bg
+    bedGraphToBigWig coverage.bg genome.txt $wig_track
+    samtools view -f 3 "${bam_file}" | cut -f1,9 | awk '\$2 > 0 && \$2 < 2000' | tr '|' '\t' | awk '{print \$(NF-1)"\t"\$(NF)}' | sort | bash "${params.HOME_REPO}/sh/average.sh" /dev/stdin | cut -f2 | sort | uniq -c | awk '{print \$2"\t"\$1}' | sort -n -k1,1 > frags.tmp
+    cat frags.tmp | awk -v bam="${bam_file}" '{print bam"\t"\$1"\t"\$2}' > "${fragsize_hist}"
     """
 
    stub:
-     fragment_file = (bam_file.toString() - '.bam') + '.frag.tsv.gz'
-     fragment_index = fragment_file + '.tbi'
-     fragment_log = fragment_file + '.log'
-     """
-     touch $fragment_file $fragment_index
-     """
+    fragment_file = (bam_file.toString() - '.bam') + '.frag.tsv.gz'
+    fragment_index = fragment_file + '.tbi'
+    fragment_log = fragment_file + '.log'
+    wig_track = (bam_file.toString() - '.bam') + '.bw'
+    fragsize_hist = (bam_file.toString() - '.bam') + '.fragsize_hist.txt'
+    """
+    touch $fragment_file $fragment_log $fragment_index $wig_track $fragsize_hist
+    """
 }
 
 

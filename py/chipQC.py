@@ -89,6 +89,8 @@ def iter_umi(samfile, verb=False):
 
     """
     read = next(samfile)
+    while read.is_unmapped:
+        read = next(samfile)
     if read.is_unmapped:
         raise ValueError('No reads mapped or SAM file out of order')
     loc = (read.reference_name, read.reference_start)

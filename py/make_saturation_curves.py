@@ -248,8 +248,8 @@ def postprocess_efficiency(erecords, pipeline_dir, outbase, USE_='R2A'):
     with PdfPages(outbase + '_efficiency_plots.pdf') as pdf:
         fig, ax = plt.subplots()
         xbar = np.arange(lysis_records.shape[0])
-        ax.bar(xbar - 0.2, lysis_records.rna_barcode_efficiency.map(lambda s: float(s.strip('%'))), color='#7F0000', width=0.4)
-        ax.bar(xbar + 0.2, lysis_records.dna_barcode_efficiency.map(lambda s: float(s.strip('%'))), color='#2f4f4f', width=0.4)
+        ax.bar(xbar - 0.2, lysis_records.rna_barcode_efficiency.astype(str).map(lambda s: float(s.strip('%'))), color='#7F0000', width=0.4)
+        ax.bar(xbar + 0.2, lysis_records.dna_barcode_efficiency.astype(str).map(lambda s: float(s.strip('%'))), color='#2f4f4f', width=0.4)
         ax.legend(labels=['RNA', 'DNA'])
         ax.set_xticks(xbar, lysis_records.lysis_id)
         ax.set_ylabel('Barcode Efficiency (%)')
@@ -294,8 +294,8 @@ def postprocess_efficiency(erecords, pipeline_dir, outbase, USE_='R2A'):
 
         fig, ax = plt.subplots()
         xbar = np.arange(lysis_records.shape[0])
-        ax.bar(xbar - 0.2, lysis_records.rna_effective_library_size.map(lambda s: int(s.lstrip('<').strip('M'))), color='#7F0000', width=0.4)
-        ax.bar(xbar + 0.2, lysis_records.dna_effective_library_size.map(lambda s: int(s.lstrip('<').strip('M'))), color='#2f4f4f', width=0.4)
+        ax.bar(xbar - 0.2, lysis_records.rna_effective_library_size.astype(str).map(lambda s: int(s.lstrip('<').strip('M'))), color='#7F0000', width=0.4)
+        ax.bar(xbar + 0.2, lysis_records.dna_effective_library_size.astype(str).map(lambda s: int(s.lstrip('<').strip('M'))), color='#2f4f4f', width=0.4)
         ax.legend(labels=['RNA', 'DNA'])
         ax.set_xticks(xbar, lysis_records.lysis_id)
         ax.set_ylabel('Estimated Library Size\n(Million UMI)')
@@ -305,8 +305,8 @@ def postprocess_efficiency(erecords, pipeline_dir, outbase, USE_='R2A'):
    
         fig, ax = plt.subplots()
         xbar = np.arange(lysis_records.shape[0])
-        ax.bar(xbar - 0.2, lysis_records.rna_reads_to_target.map(lambda s: int(s.lstrip('<').strip('M'))), color='#7F0000', width=0.4)
-        ax.bar(xbar + 0.2, lysis_records.dna_reads_to_target.map(lambda s: int(s.lstrip('<').strip('M'))), color='#2f4f4f', width=0.4)
+        ax.bar(xbar - 0.2, lysis_records.rna_reads_to_target.astype(str).map(lambda s: int(s.lstrip('<').strip('M'))), color='#7F0000', width=0.4)
+        ax.bar(xbar + 0.2, lysis_records.dna_reads_to_target.astype(str).map(lambda s: int(s.lstrip('<').strip('M'))), color='#2f4f4f', width=0.4)
         ax.legend(labels=['RNA', 'DNA'])
         ax.set_xticks(xbar, lysis_records.lysis_id)
         ax.set_ylabel('Reads to Saturation (M)')
