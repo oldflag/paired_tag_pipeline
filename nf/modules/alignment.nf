@@ -120,18 +120,19 @@ process trimming_bwa {
   script:
     bam="${sequence_id}.bam"
     int_bam="${sequence_id}.uns.bam"
+    trim_report = "${sequence_id}.trim_report.txt"
     """
     if [ "${fq2}" == "null" ]; then
         tmp_fq="trimmed.fq"
         mkfifo \$tmp_fq
-        cutadapt -a ${params.adapter_seq} -g ${params.universal_seq} -g ${params.transposase_seq} --times 2 -o ${fq1} -j ${params.trim_ncores} -q ${params.trim_qual} -m 25 ${input_fq1} > ${trim_report} &
+        cutadapt -a ${params.adapter_seq} -g ${params.universal_seq} -g ${params.transposase_seq} --times 2 -o ${fq1} -j ${params.trim_ncores} -q ${params.trim_qual} -m 25 ${fq1} > ${trim_report} &
         bwa mem -R "@RG\\tID:${sequence_id}.RG\\tSM:${sequence_id}\\tPL:UNK\\tPU:UNK}" \\
                 -t $params.alignment_ncore -k 17 $params.genome_reference \$tmp_fq | samtools sort -@ $params.alignment_ncore -o "${bam}"
         rm \$tmp_fq
     elif [ "${fq3}" == "null" ]; then
         tmp_fq1="tmp_r1.fq"
         tmp_fq2="tmp_r2.fq"
-        cutadapt -a ${params.adapter_seq} -g ${params.universal_seq} -g ${params.transposase_seq} --times 2 -o \${tmp_fq1} \${tmp_fq2} -j ${params.trim_ncores} -q ${params.trim_qual} -m 25 ${input_fq1} > ${trim_report} &
+        cutadapt -a ${params.adapter_seq} -g ${params.universal_seq} -g ${params.transposase_seq} --times 2 -o \${tmp_fq1} -p \${tmp_fq2} -j ${params.trim_ncores} -q ${params.trim_qual} -m 25 ${fq1} ${fq2} > ${trim_report} 
         bwa mem -R "@RG\\tID:${sequence_id}.RG\\tSM:${sequence_id}\\tPL:UNK\\tPU:UNK" \\
                 -t $params.alignment_ncore -k 17 $params.genome_reference \$tmp_fq1 \$tmp_fq2 | samtools sort -@ $params.alignment_ncore -o "${bam}"
         rm \$tmp_fq1 \$tmp_fq2

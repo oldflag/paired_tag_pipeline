@@ -21,6 +21,7 @@ process MACS2_peakcall {
 
   output:
     tuple val(experiment_name), file(merged_peaks), file(peaks_saf), val(antibody_name)
+    file filt_wig
 
   script:
     basename = "${experiment_name}_${antibody_name}"
@@ -29,6 +30,7 @@ process MACS2_peakcall {
     merged_peaks = "${basename}_peaks_merged.bed"
     peaks_saf = "${basename}_peaks_merged.saf"
     filt_bam = "${basename}_filt.bam"
+    filt_wig = "${basename}_filt.bw"
     """
     samtools view -hb -q 30 "${bam_file}" > "${filt_bam}" 
     macs2 callpeak -t "${filt_bam}" -n "${basename}" --outdir . \
@@ -48,6 +50,15 @@ process MACS2_peakcall {
               echo "nopeak	chr1	15000000	16000000	." >> ${peaks_saf}
           fi
       fi
+    samtools index "${filt_bam}"
+    if [[ -e "${filt_bam}.bai" ]]; then
+        BAMscale scale -k no -r unscaled -z 5 -j 5 -q 30 -o ./ -t 4 --bam "${filt_bam}"
+        this_bw=\$(find . -name '*.bw')
+        mv \$this_bw $filt_wig
+    else
+        this_bw="${filt_bam}.empty.bw"
+        touch "${this_bw}"
+    fi
     rm "${filt_bam}"
     """
 
@@ -55,8 +66,9 @@ process MACS2_peakcall {
     basename = "${experiment_name}_${antibody_name}"
     merged_peaks = "${basename}_peaks_merged.bed"
     peaks_saf = "${basename}_peaks_merged.saf"
+    filt_wig = "${basename}_filt.bw"
     """
-    touch "${merged_peaks}" "${peaks_saf}"
+    touch "${merged_peaks}" "${peaks_saf}" "${filt_wig}"
     """
 }
 
@@ -73,6 +85,7 @@ process MACS2_multi {
 
   output:
     tuple val(experiment_name), file(merged_peaks), file(peaks_saf), val(antibody_name)
+    file "wigs/*.bw"
 
   script:
     basename = "${experiment_name}_${antibody_name}"
@@ -82,6 +95,7 @@ process MACS2_multi {
     broad_peaks = "${basename}_peaks.broadPeak"
     merged_peaks = "${basename}_peaks_merged.bed"
     peaks_saf = "${basename}_peaks_merged.saf"
+    bamlist2 = bam_file.join(' --bam ')
     """
     # note - below will UMI-dedup and merge. This has been disabled for efficiency.
     #echo "${bamlist}" > bamlist.txt
@@ -104,15 +118,21 @@ process MACS2_multi {
               echo "nopeak	chr1	15000000	16000000	." >> ${peaks_saf}
           fi
       fi
-    rm -f "${filt_bam}"
+    # rm -f "${filt_bam}"
+    echo "${bamlist}" | tr ' ' '\n' > bams.txt
+    while read -r bfile; do
+        samtools index \$bfile
+    done < bams.txt
+    BAMscale scale -k no -r unscaled -z 5 -j 5 -q 30 -o ./wigs -t 4 --bam $bamlist2
     """
     
   stub:
     basename = "${experiment_name}_${antibody_name}"
     merged_peaks = "${basename}_peaks_merged.bed"
     peaks_saf = "${basename}_peaks_merged.saf"
+    wig_fs = bam_file.map{ "wig/" + it.basename() + ".wig" }
     """
-    touch "${merged_peaks}" "${peaks_saf}"
+    touch "${merged_peaks}" "${peaks_saf}" $wig_fs
     """
     
 }
