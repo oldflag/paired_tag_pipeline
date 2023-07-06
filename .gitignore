@@ -1,2 +1,3 @@
 py/__pycache__/*.pyc
 nf/docker/.nextflow/*
+nf/workflows/config/*.config
