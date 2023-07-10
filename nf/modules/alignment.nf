@@ -66,7 +66,7 @@ process star_aligner_single {
 
 
 process basic_bwa {
-  conda params.HOME_REPO + '/nf/envs/bwa.yaml'
+  // conda params.HOME_REPO + '/nf/envs/bwa.yaml'
 
   input:
     tuple val(sequence_id), val(fq1), val(fq2), val(fq3)
@@ -109,7 +109,7 @@ process basic_bwa {
 
 
 process trimming_bwa {
-  conda params.HOME_REPO + '/nf/envs/bwa.yaml'
+  // conda params.HOME_REPO + '/nf/envs/bwa.yaml'
 
   input:
     tuple val(sequence_id), val(fq1), val(fq2), val(fq3)

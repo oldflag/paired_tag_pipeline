@@ -218,7 +218,7 @@ process merge_counts {
  *   + HOME_REPO : the path to the home repository
  */
 process scanpy_to_signac {
-  conda params.HOME_REPO + '/nf/envs/seurat.yaml'
+  // conda params.HOME_REPO + '/nf/envs/seurat.yaml'
 
   input:
     file dna_h5ad

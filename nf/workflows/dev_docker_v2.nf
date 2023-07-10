@@ -150,7 +150,7 @@ workflow {
   // output: (experiment, bed, saf, antibody)
 
   // combining all peaks for publication
-  merged_saf = merge_saf(dna_peaks.map{it -> it[2]}.collect(), "all_antibodies")
+  merged_saf = merge_saf(dna_peaks[0].map{it -> it[2]}.collect(), "all_antibodies")
 
   // //filtering and tagging: MI -> umi, BC -> raw sbc, CR -> full barcode string, CB -> parsed BC1BC2SM1, XX -> the read number
   // // in: (seq_id, bamfile, seq_type, assay_id, antibody_name)
@@ -172,7 +172,7 @@ workflow {
   // create (antibody, assay, sample, bam, antibody_peak)
   // strategy:  (antibody, assay, alignment, bam).join(antibody, saf).map(assay"_"antibody, alignment, bam, saf)
   chipqc_input = inner_join(dna_tagged.map{ it -> tuple(it[4], it[3], it[0], it[1])},
-    dna_peaks.map{ it -> tuple(it[3], it[2]) }
+    dna_peaks[0].map{ it -> tuple(it[3], it[2]) }
   ).map{it -> tuple(it[2] + "_" + it[0] + "_" + it[1], it[3], it[4])} // use the alignment id
   //chipqc_input.subscribe{ println(it) }
   chip_qc = chip_qc(chipqc_input, params.py_dir)
@@ -193,14 +193,14 @@ workflow {
   // out: (seq_id, count_tag, umi_counts_txt, read_counts_txt), log file
   
   // DNA read and umi count per cell 
-  dna_counts = dna_count(dna_tagged[0], 'BN')
+  dna_counts = dna_count(dna_tagged, 'BN')
   // RNA read and umi count per cell per gene
-  rna_counts = rna_count(rna_tagged[0], 'GN')
+  rna_counts = rna_count(rna_tagged, 'GN')
   // RNA read and umi count per cell  
-  rna_bin_counts = rna_bin_count(rna_tagged[0], 'BN')
+  rna_bin_counts = rna_bin_count(rna_tagged, 'BN')
 
   // read and umi count based on peaks
-  peak_counts = peak_count(dna_tagged[0], "PK")
+  peak_counts = peak_count(dna_tagged, "PK")
 
   
   // merge DNA read and umi counts
@@ -242,8 +242,8 @@ workflow {
   //dna_seur = convert_dna_umi(dna_umi_merged_h5ad[0], params.genome_name)
 
   // publish results
-  publishdnabam(dna_tagged[0].map{ it -> it[0]})
-  // publishrnabam(rna_tagged[0].map{ it -> it[0]})
+  publishdnabam(dna_tagged.map{ it -> it[1]})
+  publishrnabam(rna_tagged.map{ it -> it[1]})
   publishdnareadcount(dna_read_merged_h5ad[0])
   publishdnaumicount(dna_umi_merged_h5ad[0])
   publishrnareadcount(rna_read_merged_h5ad[0])
