@@ -16,7 +16,7 @@ nextflow.enable.dsl=2
  *
  */
 process umitools_count {
-  conda params.HOME_REPO + '/nf/envs/umi_tools.yaml'
+  // conda params.HOME_REPO + '/nf/envs/umi_tools.yaml'
   input:
       tuple val(sequence_id), file(annot_bam), val(seqtype), val(assay_id), val(antibody)
       val count_tag
@@ -86,7 +86,7 @@ process umitools_count {
 
 process merge_counts {
   
-  conda params.HOME_REPO + '/nf/envs/scanalysis.yaml'
+  // conda params.HOME_REPO + '/nf/envs/scanalysis.yaml'
 
   input:
       tuple file(count_files), val(file_header)
@@ -126,7 +126,7 @@ process merge_counts {
  *   + RUN_NAME : the name of the run
  */
 process h5ad_qc {
-  conda params.HOME_REPO + '/nf/envs/scanalysis.yaml'
+  // conda params.HOME_REPO + '/nf/envs/scanalysis.yaml'
 
   input:
     file rna_reads
@@ -163,7 +163,7 @@ process h5ad_qc {
  * QC pdf file
  */
 process cluster_qc {
-  conda params.HOME_REPO + '/nf/envs/scanalysis.yaml'
+  // conda params.HOME_REPO + '/nf/envs/scanalysis.yaml'
 
   input:
     file rna_umi

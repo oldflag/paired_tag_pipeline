@@ -52,7 +52,7 @@ process downsample_fastqs {
  *  + umi_len: the UMI length
  */
 process parse_pairedtag_r2 {
-  conda params.HOME_REPO + '/nf/envs/skbio.yaml'
+  // conda params.HOME_REPO + '/nf/envs/skbio.yaml'
 
   input:
     tuple val(sequence_id), file(r2_fastq), val(library_id)
@@ -93,7 +93,7 @@ process parse_pairedtag_r2 {
  *  + umi_len: the UMI length
  */
 process process_pairedtag {
-  conda params.HOME_REPO + '/nf/envs/skbio.yaml'
+  // conda params.HOME_REPO + '/nf/envs/skbio.yaml'
 
   input:
     tuple val(sequence_id), file(r1_fastq), file(r2_fastq), val(library_id)
@@ -143,7 +143,7 @@ process process_pairedtag {
  *
  */
 process barcode_qc {
-  conda params.HOME_REPO + '/nf/envs/skbio.yaml'
+  // conda params.HOME_REPO + '/nf/envs/skbio.yaml'
   
   input:
     tuple val(sequence_id), file(tagged_fastq)  // using .collect()
@@ -212,7 +212,7 @@ process split_annot_r1 {
 }
 
 process add_tags {
-  conda params.HOME_REPO + '/nf/envs/bwa.yaml'
+  // conda params.HOME_REPO + '/nf/envs/bwa.yaml'
   
   input:
     tuple val(alignment_id), file(bam_file), val(seqtype), val(assay_id), val(antibody)

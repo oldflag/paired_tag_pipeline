@@ -13,7 +13,7 @@ nextflow.enable.dsl=2
  * HOME_REPO - location of the repository
  */
 process merge_rnaseqc {
-  conda params.HOME_REPO + '/nf/envs/skbio.yaml'  // piggyback on skbio for plotting packages
+  // conda params.HOME_REPO + '/nf/envs/skbio.yaml'  // piggyback on skbio for plotting packages
 
   input:
     file metrics_csv  // called with .collect()
@@ -59,7 +59,7 @@ process merge_rnaseqc {
  *
  */
 process rnaseqc_call {
-  conda params.HOME_REPO  + '/nf/envs/rseqc.yaml'
+  // conda params.HOME_REPO  + '/nf/envs/rseqc.yaml'
 
   input:
     tuple val(sequence_id), file(bam_file), val(assay), val(antibody_name) 

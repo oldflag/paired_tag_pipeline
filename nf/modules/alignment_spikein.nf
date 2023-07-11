@@ -19,7 +19,7 @@ def checkExists(var_) {
  *
  */
 process star_aligner {
-  conda params.HOME_REPO + '/nf/envs/star.yaml'
+  // conda params.HOME_REPO + '/nf/envs/star.yaml'
   
     input:
       tuple val(sequence_id), file(fastq_trimmed1), file(fastq_trimmed2), val(seqtype)
@@ -121,7 +121,7 @@ process star_aligner {
  */
 
 process bwa_aligner {
-  conda params.HOME_REPO + '/nf/envs/bwa.yaml'
+  // conda params.HOME_REPO + '/nf/envs/bwa.yaml'
 
   input:
     tuple val(sequence_id), file(fq_file), file(fq_file2),val(seqtype)
@@ -190,7 +190,7 @@ process bwa_aligner {
  * This process extracts basic alignment QC metrics
  */
 process alignment_qc {
-  conda params.HOME_REPO + '/nf/envs/pysam.yaml'
+  // conda params.HOME_REPO + '/nf/envs/pysam.yaml'
 
   input:
     tuple val(sequence_id), file(bam_file), file(spikein_bam) val(seqtype), val(assay), val(antibody)
@@ -245,7 +245,7 @@ process alignment_qc {
  * fragment_ncore - the number of cores to use
  */
 process bam_to_frag {
-  conda params.HOME_REPO + '/nf/envs/bamtofrag.yaml'
+  // conda params.HOME_REPO + '/nf/envs/bamtofrag.yaml'
   input:
     file bam_file
 

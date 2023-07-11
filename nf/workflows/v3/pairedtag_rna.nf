@@ -2,7 +2,7 @@ nextflow.enable.dsl=2
 
 include { 
   add_tags  
-} from params.HOME_REPO + "/nf/modules/pairedtag_reads"
+} from params.HOME_REPO + "/nf/modules/pairedtag_reads_v3"
 
 include { 
   umitools_count as rna_count; 
