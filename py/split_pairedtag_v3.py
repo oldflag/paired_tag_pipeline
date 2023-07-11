@@ -6,7 +6,7 @@ The output annotated fastq files will be split by the sample ID
 
 """
 from argparse import ArgumentParser
-import parse_R2 as pr2
+import parse_R2_v3 as pr2
 from itertools import islice
 from multiprocessing import Pool
 from utils import read_fasta, read_fastq, dxopen as xopen, fastq_record
@@ -86,16 +86,16 @@ def iter_chunk_args(r1_fastq, r2_fastq, linker1, linker2, barcode_map,
 
 def annotate_reads(r1_recs, r2_recs, linker1, linker2, umi_size, barcode_size,
                    sample_size, linker_size, barcode_map, sample_map):
-    barcodes = pr2.parse_barcodes_chunk(r2_recs, linker1.seq, linker2.seq, umi_size, barcode_size, sample_size,
+    barcodes = pr2.parse_barcodes_chunk2(r2_recs, linker1.seq, linker2.seq, umi_size, barcode_size, sample_size,
                                         linker_size, barcode_map, sample_map)
     reads = list()
-    for read, (name, ident, barcodes) in zip(r1_recs, barcodes):
+    for read, (name, ident, barcodes, r2seq, r2qual) in zip(r1_recs, barcodes):
         rname = name.split(" ")[0] + '|' + ident + '|' + barcodes
         if ident == '*':
             sm = '*'
         else:
             sm = ident.split(':')[-2]
-        reads.append((sm, fastq_record(rname, read.seq, read.qual)))
+        reads.append((sm, fastq_record(rname, read.seq, read.qual), fastq_record(rname, r2seq, r2qual)))
 
     return reads
 
@@ -115,7 +115,8 @@ def build_sample_fq_map(manifest_f, assay_ids, this_seq_id):
         sid, ab = rec['sequence_id'], rec['antibody_target']
         smid = rec['sample_id']
         fqf = f'{sid}__{aid}__{ab}__{smid}__1.fq'
-        fqs[aid] = fqf
+        fqf2 = f'{sid}__{aid}__{ab}__{smid}__2.fq'
+        fqs[aid] = (fqf, fqf2)
     return fqs
 
 
@@ -129,34 +130,45 @@ def main(args):
 
     base = args.outdir + '/'
     sample_fq_map = build_sample_fq_map(args.sample_manifest, list(sample_seqmap.values()), args.sequence_id)
-    sample_fq_map['*'] = '%s_UNK__UNK__UNK__UNK_unmatched__1.fq' % args.library_id
+    sample_fq_map['*'] = ('%s_UNK__UNK__UNK__UNK_unmatched__1.fq' % args.library_id, 
+                          '%s_UNK__UNK__UNK__UNK_unmatched__2.fq' % args.library_id)
     handle_map, gz_procs = dict(), list()
-    for sm, fq in sample_fq_map.items():
+    for sm, (fq, fq2) in sample_fq_map.items():
         print('Creating %s for streaming %s' % (fq, sm))
         os.mkfifo(fq)
+        os.mkfifo(fq2)
         p = subprocess.Popen('cat %s | gzip -c > %s/%s.gz' % (fq, base, fq), shell=True)
         gz_procs.append(p)
-        handle_map[sm] = (io.open(fq, 'wt'), fq)
+        p2 = subprocess.Popen('cat %s | gzip -c > %s/%s.gz' % (fq2, base, fq2), shell=True)
+        handle_map[sm] = (io.open(fq, 'wt'), fq, io.open(fq2, 'wt'), fq2)
+        gz_procs.append(p2)
 
     from contextlib import closing
     with closing(Pool(args.threads, maxtasksperchild=1)) as pool:
         chunk_iter = pool.imap_unordered(annotate_reads_, annot_args)
         for i, read_chunk in enumerate(chunk_iter):
-            for sample_id, record in read_chunk:
+            for sample_id, record, record2 in read_chunk:
                 handle_map[sample_id][0].write('@' + record.name + '\n')
                 handle_map[sample_id][0].write(record.seq + '\n')
                 handle_map[sample_id][0].write('+\n')
                 handle_map[sample_id][0].write(record.qual + '\n')
+                handle_map[sample_id][2].write('@' + record2.name + '\n')
+                handle_map[sample_id][2].write(record2.seq + '\n')
+                handle_map[sample_id][2].write('+\n')
+                handle_map[sample_id][2].write(record2.qual + '\n')
     
-    for sample_id, (handle, _) in handle_map.items():
+    for sample_id, (handle, _, handle2, _) in handle_map.items():
         handle.close()
+        handle2.close()
 
     for proc in gz_procs:
         _ = proc.communicate()
 
-    for sample_id, (_, file_) in handle_map.items():
+    for sample_id, (_, file_, _, file2_) in handle_map.items():
         print('Closing %s' % file_)
         os.system('rm %s' % file_) 
+        print('Closing %s' % file2_)
+        os.system('rm %s' % file2_) 
 
 
 if __name__ == '__main__':

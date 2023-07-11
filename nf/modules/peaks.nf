@@ -57,7 +57,7 @@ process MACS2_peakcall {
         mv \$this_bw $filt_wig
     else
         this_bw="${filt_bam}.empty.bw"
-        touch "${this_bw}"
+        touch "\${this_bw}"
     fi
     rm "${filt_bam}"
     """
@@ -82,10 +82,11 @@ process MACS2_multi {
 
   input:
     tuple val(antibody_name), file(bam_file), val(experiment_name)
+    val genome_type
 
   output:
     tuple val(experiment_name), file(merged_peaks), file(peaks_saf), val(antibody_name)
-    file "wigs/*.bw"
+    file track_bw
 
   script:
     basename = "${experiment_name}_${antibody_name}"
@@ -95,16 +96,18 @@ process MACS2_multi {
     broad_peaks = "${basename}_peaks.broadPeak"
     merged_peaks = "${basename}_peaks_merged.bed"
     peaks_saf = "${basename}_peaks_merged.saf"
+    track_bw = "${basename}.bw"
     bamlist2 = bam_file.join(' --bam ')
+    genome_ref = params.genome_reference[genome_type]
     """
     # note - below will UMI-dedup and merge. This has been disabled for efficiency.
     #echo "${bamlist}" > bamlist.txt
     #python "${params.HOME_REPO}"/py/macs2_merge.py bamlist.txt > "${filt_bam}"
     
     macs2 callpeak -t $bamlist -n "${basename}" --outdir . \
-       -q 0.1 -g "${params.macs_genome_type}" --nomodel
+       -q 0.1 -g "${genome_type}" --nomodel
     macs2 callpeak -t $bamlist --broad -n "${basename}" --outdir . \
-       -q 0.1 -g "${params.macs_genome_type}" --nomodel
+       -q 0.1 -g "${genome_type}" --nomodel
 
     cat "${narrow_peaks}" "${broad_peaks}" | cut -f1-5 | bedtools sort -i /dev/stdin | bedtools merge -i /dev/stdin > "${merged_peaks}"
     echo "GeneID	Chr	Start	End	Strand" > "${peaks_saf}"
@@ -112,7 +115,7 @@ process MACS2_multi {
       nl=\$(cat ${peaks_saf} | wc -l)
       if [ "\${nl}" -eq "1" ]; then
           # just the header
-          if [ "${params.macs_genome_type}" -eq "hs" ]; then
+          if [ "${genome_type}" -eq "hs" ]; then
               echo "nopeak	1	15000000	16000000	." >> ${peaks_saf}
           else
               echo "nopeak	chr1	15000000	16000000	." >> ${peaks_saf}
@@ -123,16 +126,17 @@ process MACS2_multi {
     while read -r bfile; do
         samtools index \$bfile
     done < bams.txt
-    BAMscale scale -k no -r unscaled -z 5 -j 5 -q 30 -o ./wigs -t 4 --bam $bamlist2
+    #BAMscale scale -k no -r unscaled -z 5 -j 5 -q 30 -o ./wigs -t 4 --bam $bamlist2
+    bash "${params.HOME_REPO}"/sh/make_tracks.bash bams.txt "${params.HOME_REPO}/py/bam2frag.py" "${track_bw}" "${genome_ref}.fai"
     """
     
   stub:
     basename = "${experiment_name}_${antibody_name}"
     merged_peaks = "${basename}_peaks_merged.bed"
     peaks_saf = "${basename}_peaks_merged.saf"
-    wig_fs = bam_file.map{ "wig/" + it.basename() + ".wig" }
+    track_bw = "${basename}.bw"
     """
-    touch "${merged_peaks}" "${peaks_saf}" $wig_fs
+    touch "${merged_peaks}" "${peaks_saf}" "${track_bw}"
     """
     
 }
@@ -187,11 +191,12 @@ process chip_qc {
     tuple val(chipfile_id), file(cell_stats), file(sample_stats)
 
   script:
-    cell_stats = "${chipfile_id}.chipQC_cell.txt"
-    sample_stats = "${chipfile_id}.chipQC_sample.txt"
-    bam_file_lst=bam_file.join(',')
+    cell_stats = "${chipfile_id}.antibQC_cell.txt"
+    sample_stats = "${chipfile_id}.antibQC_sample.txt"
     """
-    python "${py_dir}/chipQC.py" "${bam_file_lst}" "${saf_file}" "${cell_stats}" --sample_out "${sample_stats}"
+    samtools view -F 4 -h -b "${bam_file}" > mapped.bam
+    python "${params.HOME_REPO}/py/chipQC.py" mapped.bam "${saf_file}" "${cell_stats}" --sample_out "${sample_stats}"
+    rm mapped.bam
     """
 
   stub:
@@ -225,9 +230,9 @@ process merge_chip_qc {
     file chipseq_plots
 
   script:
-    chipseq_merged_sample = "${output_base}.sample_chipQC.txt"
-    chipseq_merged_cell = "${output_base}.cell_chipQC.txt"
-    chipseq_plots = "${output_base}.chipQC.pdf"
+    chipseq_merged_sample = "${output_base}.sample_abQC.txt"
+    chipseq_merged_cell = "${output_base}.cell_abQC.txt"
+    chipseq_plots = "${output_base}.antibodyQC.pdf"
     """
     hdr=0
     find . -name '*_cell.txt' > infiles
@@ -329,3 +334,4 @@ process plot_peaks_in_regions {
     done
     """
 }
+

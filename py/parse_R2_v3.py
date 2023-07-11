@@ -143,6 +143,7 @@ def extract_barcodes(seq, linker1, linker2, lumi, lbc, lsn, lln):
     :SBC: the sample barcode sequence
     :RES: the restriction enzyme sequence, pre-pended with
           the 1bp A/T base between Linker2 and SBC
+    :EOB: the positional end of the barcode (and DNA start)
     
     These values may be None under the following circumstances:
       + More than 3 'N' bases in read
@@ -152,7 +153,7 @@ def extract_barcodes(seq, linker1, linker2, lumi, lbc, lsn, lln):
 
     """
     if len(seq) < (lumi + 2*lbc + 2*lln + lsn) or seq.count('N') > 3:
-        return None, None, None, None, None
+        return None, None, None, None, None, 0
 
     l1 = linker1(seq)
     # force l2 to be aligned after l1
@@ -170,10 +171,10 @@ def extract_barcodes(seq, linker1, linker2, lumi, lbc, lsn, lln):
         if (0 < shift < lbc) and l2['optimal_alignment_score'] > l1['optimal_alignment_score']:
             l1 = {'target_begin': l1['target_begin'] - shift}
         else:
-            return None, None, None, None, None
+            return None, None, None, None, None, 0
 
     if l1['target_begin'] > lumi + lbc + 5:
-        return None, None, None, None, None
+        return None, None, None, None, None, 0
 
     if l1['target_begin'] < lumi + lbc:
         # skipped base in UMI or barcode -- assume UMI
@@ -190,18 +191,19 @@ def extract_barcodes(seq, linker1, linker2, lumi, lbc, lsn, lln):
         tbase = 'N'
         sbc = 'N' 
         res = 'N' * RE_LENGTH
+        eob = 0   # no dna so this won't map
     else:
         tbase = seq[eol2]
         eol2 += 1
         sbc = seq[eol2:(eol2 + lsn)]
         res = seq[(eol2+lsn):(eol2+lsn+RE_LENGTH)]
+        eob = eol2 + lsn + RE_LENGTH
 
-    return umi, bc1, bc2, sbc, tbase + res
+    return umi, bc1, bc2, sbc, tbase + res, eob
 
 
 def parse_R2_barcodes_(args):
     return parse_barcodes_chunk(*args)
-
 
 def parse_barcodes_chunk(reads, l1, l2, umi_bp, bc_bp, sn_bp, ln_bp,
                          bc_map, sn_map):
@@ -213,6 +215,18 @@ def parse_barcodes_chunk(reads, l1, l2, umi_bp, bc_bp, sn_bp, ln_bp,
     swl1 = StripedSmithWaterman(l1)
     swl2 = StripedSmithWaterman(l2)
     return [parse_R2_barcodes(r, swl1, swl2, umi_bp, bc_bp, sn_bp,
+                              ln_bp, bc_map, sn_map) for r in reads]
+
+def parse_barcodes_chunk2(reads, l1, l2, umi_bp, bc_bp, sn_bp, ln_bp,
+                         bc_map, sn_map):
+    """
+    All R2 sequences in `reads` into UMI, well1, well2, sample, and
+    restriction enzyme barcodes. See `parse_R2_barcodes`
+
+    """
+    swl1 = StripedSmithWaterman(l1)
+    swl2 = StripedSmithWaterman(l2)
+    return [parse_R2_barcodes2(r, swl1, swl2, umi_bp, bc_bp, sn_bp,
                               ln_bp, bc_map, sn_map) for r in reads]
 
 
@@ -243,7 +257,7 @@ def parse_R2_barcodes(read, sw_l1, sw_l2, umi_bp, bc_bp, sn_bp,
            cases where the sequence could not be parsed.
 
     """
-    umi, bc1, bc2, sbc, ers = \
+    umi, bc1, bc2, sbc, ers, _ = \
             extract_barcodes(read.seq, sw_l1, sw_l2, umi_bp, bc_bp, sn_bp, ln_bp)
 
     if umi is None:
@@ -260,6 +274,33 @@ def parse_R2_barcodes(read, sw_l1, sw_l2, umi_bp, bc_bp, sn_bp,
 
     return (read.name, f'{tr_umi}:{tr_bc1}:{tr_bc2}:{tr_sbc}:{tr_ers}',
             f'{umi}:{bc1}:{bc2}:{sbc}:{ers}')
+
+
+def parse_R2_barcodes2(read, sw_l1, sw_l2, umi_bp, bc_bp, sn_bp, 
+        ln_bp, bc_map, sn_map):
+    """\
+    Apply parse R2 barcodes, but also return the "hanging" sequence
+    and quality of R2
+
+    """
+    umi, bc1, bc2, sbc, ers, eob = \
+            extract_barcodes(read.seq, sw_l1, sw_l2, umi_bp, bc_bp, sn_bp, ln_bp)
+
+    if umi is None:
+        return read.name, '*', '*', read.seq, read.qual  # could not place linkers, or read filtered
+
+    tr_umi = '*' if umi[0] == 'N' else umi
+    tr_bc1 = bc_map[bc1] if bc1 in bc_map else rescue(bc1, bc_map)
+    tr_bc2 = bc_map[bc2] if bc2 in bc_map else rescue(bc2, bc_map)
+    tr_sbc = sn_map[sbc] if sbc in sn_map else rescue(sbc, sn_map)
+    # the ers string consists of [typebp][RE seq]
+    # if typebp is A, it is dna; T for rna; fallback is to use
+    # the restriction enzyme sequence CCTGCAGG (dna) and GCGGCCGC (rna)
+    tr_ers = 'rna' if 'TCGA' in ers else 'dna' if 'GGCC' in ers else 'unk'
+
+    return (read.name, f'{tr_umi}:{tr_bc1}:{tr_bc2}:{tr_sbc}:{tr_ers}',
+            f'{umi}:{bc1}:{bc2}:{sbc}:{ers}', read.seq[eob:], read.qual[eob:])
+    
 
 
 def rescue(seq, seqmap):
@@ -283,6 +324,8 @@ def basename(fn):
 def get_sample_seqs(fasta_or_digest, input_fastq, library_id):
     if fasta_or_digest[-4:] == '.csv':
         records = [r for r in DictReader(open(fasta_or_digest))]
+        from pprint import pprint
+        pprint(records)
         # r['implied_id'] = r['sample_id'] + '_' + r['antibody_target'] + '_' + r['dna_well']
         if library_id:
             records = [r for r in records if basename(r['fastq2']) == basename(input_fastq) and r['lysis_id'] == library_id]
@@ -295,7 +338,9 @@ def get_sample_seqs(fasta_or_digest, input_fastq, library_id):
             match_set = [(basename(r['fastq2']).strip('.fastq.gz') + "_ds.fq.gz") == basename(input_fastq) for r in records]
             records = [r for i, r in enumerate(records) if match_set[i]]
         if len(records) == 0:
-            raise ValueError('No matching records')
+            raise ValueError('No matching records:\n\nlibrary_id: %s\nobs_ids: %s\n\ntarget_fq: %s\n\nobs_fqs: %s' % 
+                             (library_id, ','.join({r['lysis_id'] for r in DictReader(open(fasta_or_digest))}),
+                              input_fastq, ','.join({r['fastq2'] for r in DictReader(open(fasta_or_digest))})))
         return [fasta_record(r['assay_info'], r['barcode']) for r in records] 
     else:
         return list(read_fasta(fasta_or_digest))

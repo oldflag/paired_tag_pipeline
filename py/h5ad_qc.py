@@ -99,7 +99,9 @@ def main(args):
         plt.xlabel('RNA Reads (each cell)')
         plt.ylabel('RNA UMI (each cell)');
         
-        plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250);plt.close()
+        plt.gca().set_rasterized(True)
+        #plt.savefig(pdf,format='pdf',dpi=250)
+        plt.close()
         plt.figure(figsize=(12,8))
         for lib in dat.lysis_id.unique():
             ddf = dat[dat.lysis_id == lib]
@@ -110,7 +112,9 @@ def main(args):
         plt.tight_layout()
         plt.xlabel('RNA Reads (each cell)')
         plt.ylabel('RNA UMI (each cell)'); 
-        plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250);plt.close()
+        plt.gca().set_rasterized(True)
+        #plt.savefig(pdf,format='pdf',dpi=250)
+        plt.close()
 
 
         plt.figure(figsize=(12,8))
@@ -123,7 +127,11 @@ def main(args):
         plt.xlabel('DNA Reads (each cell)')
         plt.ylabel('DNA UMI (each cell)');
         
-        plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250);plt.close();plt.figure(figsize=(12,8))
+        plt.gca().set_rasterized(True)
+        #plt.savefig(pdf,format='pdf',dpi=250)
+        plt.close()
+
+        plt.figure(figsize=(12,8))
         for lib in dat.lysis_id.unique():
             ddf = dat[dat.lysis_id == lib]
             plt.scatter(ddf.dna_reads, ddf.dna_umis, marker='.', label=lib)
@@ -133,7 +141,9 @@ def main(args):
         plt.tight_layout()
         plt.xlabel('RNA Reads (each cell)')
         plt.ylabel('RNA UMI (each cell)');
-        plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250);plt.close()
+        plt.gca().set_rasterized(True);
+        #plt.savefig(pdf,format='pdf',dpi=250)
+        plt.close()
 
         dat.loc[:, 'dna_complexity'] = dat.dna_umis / dat.dna_reads
         dat.loc[:, 'rna_complexity'] = dat.rna_umis / dat.rna_reads
@@ -150,7 +160,9 @@ def main(args):
         plt.xlabel('RNA Complexity (UMI per read; per cell)')
         plt.ylabel('DNA Complexity (UMI per read; per cell)');
         plt.title('Library Complexity per cell\n(500 UMI minimum per cell)');yxline();
-        plt.tight_layout();plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250);plt.close()
+        plt.tight_layout();plt.gca().set_rasterized(True)
+        #plt.savefig(pdf,format='pdf',dpi=250)
+        plt.close()
 
         for lib in dat.lysis_id.unique():
             dsub = dat[dat.lysis_id == lib]
@@ -225,7 +237,9 @@ def main(args):
         plt.ylabel('DNA UMIs (normalized)');
         yxline(min_=5e-8);
         plt.xscale('log');plt.yscale('log')
-        plt.gca().set_rasterized(True);plt.savefig(pdf,format='pdf',dpi=250);plt.close()
+        plt.gca().set_rasterized(True)
+        #plt.savefig(pdf,format='pdf',dpi=250)
+        plt.close()
         
         covered_both = dat[(dat.rna_umis >= 500) & (dat.dna_umis >=500)].groupby('lysis_id')['rna_umis'].count().reset_index()
         covered_both.columns = ['library', 'n_cells']
@@ -241,7 +255,9 @@ def main(args):
         plt.figure(figsize=(12,8))
         sbn.barplot(x='library', y='n_cells', hue='assay', data=ddf)
         plt.xticks(rotation=90);plt.ylabel('Number of covered cells');plt.xlabel('Library')
-        plt.tight_layout();plt.gca().set_rasterized(True);plt.savefig(pdf, format='pdf', dpi=250);plt.close()
+        plt.tight_layout();plt.gca().set_rasterized(True)
+        #plt.savefig(pdf, format='pdf', dpi=250)
+        plt.close()
 
         plt.figure(figsize=(12,12)) 
         covered_both = dat[(dat.rna_umis >= 500) & (dat.dna_umis >=500)].groupby('sample_id')['rna_umis'].count().reset_index()
@@ -258,7 +274,9 @@ def main(args):
         plt.figure(figsize=(12,8))
         sbn.barplot(x='sample', y='n_cells', hue='assay', data=ddf)
         plt.xticks(rotation=90);plt.ylabel('Number of covered cells');plt.xlabel('Sample')
-        plt.tight_layout();plt.gca().set_rasterized(True);plt.savefig(pdf, format='pdf', dpi=250);plt.close()
+        plt.tight_layout();plt.gca().set_rasterized(True)
+        #plt.savefig(pdf, format='pdf', dpi=250)
+        plt.close()
 
         
                 

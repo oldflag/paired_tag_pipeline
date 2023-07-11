@@ -13,12 +13,11 @@ nextflow.enable.dsl=2
  * HOME_REPO - location of the repository
  */
 process merge_rnaseqc {
-  // conda params.HOME_REPO + '/nf/envs/skbio.yaml'  // piggyback on skbio for plotting packages
+  conda params.HOME_REPO + '/nf/envs/skbio.yaml'  // piggyback on skbio for plotting packages
 
   input:
     file metrics_csv  // called with .collect()
     val base_name
-    file py_dir
 
   output:
     file merged_metrics
@@ -27,20 +26,19 @@ process merge_rnaseqc {
    script:
      merged_metrics = base_name + '_RNASeQC_merged.csv'
      metrics_plots = base_name + '_RNASeQC_merged.pdf'
-
      """
      find . -name '*.csv' > qclist.txt
      hdr=0
      while read qcf; do
          if [ \$hdr -eq "0" ]; then
-             cat "\${qcf}" > "${merged_metrics}"
+             head -n 1 "\${qcf}" | awk '{print \$0",is_spikein"}' > "${merged_metrics}"
              hdr=1
-         else
-             tail -n 1 "\${qcf}" >> "${merged_metrics}"
          fi
+         sn=\$(echo "\${qcf}" | grep -c spike | sed 's/0/normal/g' | sed 's/1/spikein/g')
+         tail -n 1 "\${qcf}" | awk -v si=\$sn '{print \$1","si}' >> "${merged_metrics}"
      done < qclist.txt
 
-     python "${py_dir}/plot_rnaseqc.py" "${merged_metrics}" "${metrics_plots}"
+     python "${params.HOME_REPO}/py/plot_rnaseqc.py" "${merged_metrics}" "${metrics_plots}" --spikein
      """
 
    stub:
@@ -61,7 +59,7 @@ process merge_rnaseqc {
  *
  */
 process rnaseqc_call {
-  // conda params.HOME_REPO  + '/nf/envs/rseqc.yaml'
+  conda params.HOME_REPO  + '/nf/envs/rseqc.yaml'
 
   input:
     tuple val(sequence_id), file(bam_file), val(assay), val(antibody_name) 
@@ -83,14 +81,7 @@ process rnaseqc_call {
 
 
     """
-    num_fastq=\$(samtools view -H $bam_file | grep PG | grep ID:STAR | tr '\\t' '\\n' | grep CL: | sed 's/\\s\\+/\\n/g' | grep -c fq.gz)
-    echo "\${num_fastq}"
-    if [ "\${num_fastq}" -gt 1 ]; then
-       args=" --unpaired"
-    else
-       args=""
-    fi
-    rnaseqc $gtf_file $bam_file --sample $basename --coverage . $args
+    rnaseqc $gtf_file $bam_file --sample $basename --coverage . --unpaired
     cut -f1 "${metrics_tsv}" | sed 's/, /_/g' | tr '\n' ',' | sed 's/,\$/\\n/g' > "${metrics_csv}"
     cut -f2 "${metrics_tsv}" | sed 's/, /_/g' | tr '\n' ',' | sed 's/,\$/\\n/g' >> "${metrics_csv}"
     """

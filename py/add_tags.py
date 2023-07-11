@@ -66,7 +66,7 @@ class TrackWindow(object):
         self.done_ = False
 
     def query(self, loc):
-        if loc is None or loc[1] == -1 or loc[0] not in self.refs:
+        if loc is None or loc[1] == -1 or loc[2] is None or loc[0] not in self.refs:
             return []
         if self.done_ and len(self.window) == 0:
             return []

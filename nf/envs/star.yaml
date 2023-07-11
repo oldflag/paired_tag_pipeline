@@ -6,4 +6,7 @@ channels:
 dependencies:
   - star
   - cutadapt
+  - openssl>=1.0.0
+  - pysam>=0.20
+  - samtools
 prefix: /home/app.dev1/anaconda3/envs/star

@@ -163,6 +163,7 @@ process trimming_bwa {
     """ 
 
  } 
+
 /*
  * This process defines a mechanism for aligning genomic dna
  * with bwa
@@ -348,15 +349,42 @@ process add_tags {
 
 
   output:
-    tuple val(alignment_id), file(annot_bam_file), val(seqtype), val(assay_id), val(antibody)
+    file fragment_file
+    file fragment_index
+    file fragment_log
+    file wig_track
+    file fragsize_hist
 
   script:
-    annot_bam_file = bam_file.simpleName - '.bam' + '_tag.bam'
-    sample_id=bam_file.simpleName.split('__')[3]
+    fragment_file = (bam_file.toString() - '.bam') + '.frag.tsv.gz'
+    fragment_index = fragment_file + '.tbi'
+    fragment_log = fragment_file + '.log'
+    fragsize_hist = (bam_file.toString() - '.bam') + '.fragsize_hist.txt'
+    wig_track = (bam_file.toString() - '.bam') + '.bw'
     """
-    strip () {
-        echo "\${1%%.*}"
-    }
+    samtools index $bam_file
+    samtools view -H $bam_file | grep @SQ | sed 's/@SQ\tSN://g' | sed 's/LN://g' > genome.txt
+    python $params.HOME_REPO/py/bam2frag.py $bam_file $fragment_file --ncores $params.fragment_ncore --nocb | tee $fragment_log
+    zcat $fragment_file | bedtools sort -i /dev/stdin | bgzip -c > ${fragment_file}.tmp
+    mv ${fragment_file}.tmp ${fragment_file}
+    zcat "${fragment_file}" | awk '{print \$1"\t"\$2"\t"\$3"\t"\$4"\t.\t."}' > unsorted.bed
+    bedtools sort -i unsorted.bed > sorted.bed
+    bedtools genomecov -i sorted.bed -g genome.txt -bg > coverage.bg
+    bedGraphToBigWig coverage.bg genome.txt $wig_track
+    samtools view -f 3 "${bam_file}" | cut -f1,9 | awk '\$2 > 0 && \$2 < 2000' | tr '|' '\t' | awk '{print \$(NF-1)"\t"\$(NF)}' | sort | bash "${params.HOME_REPO}/sh/average.sh" /dev/stdin | cut -f2 | sort | uniq -c | awk '{print \$2"\t"\$1}' | sort -n -k1,1 > frags.tmp
+    cat frags.tmp | awk -v bam="${bam_file}" '{print bam"\t"\$1"\t"\$2}' > "${fragsize_hist}"
+    """
+
+   stub:
+    fragment_file = (bam_file.toString() - '.bam') + '.frag.tsv.gz'
+    fragment_index = fragment_file + '.tbi'
+    fragment_log = fragment_file + '.log'
+    wig_track = (bam_file.toString() - '.bam') + '.bw'
+    fragsize_hist = (bam_file.toString() - '.bam') + '.fragsize_hist.txt'
+    """
+    touch $fragment_file $fragment_log $fragment_index $wig_track $fragsize_hist
+    """
+}
 
     tag_args=""
     if [  \$(strip "${annot1_file}") != "input" ]; then
@@ -379,11 +407,20 @@ process add_tags {
         tag_args="\${tag_args} --track ${annot6_file}:${annot6_tag}:${annot6_fmt}"
     fi
 
-    if [ "\${tag_args}" == "" ]; then
-        python "${py_dir}"/add_tags.py "${bam_file}" "${annot_bam_file}" --library "${alignment_id}" --antibody "${antibody}" --assay_id "${assay_id}" --sample_id "${sample_id}"
-    else
-        python "${py_dir}"/add_tags.py "${bam_file}" "${annot_bam_file}" --library "${alignment_id}" --antibody "${antibody}" --assay_id "${assay_id}" --sample_id "${sample_id}" \$tag_args
-    fi
+  input:
+    file fragment_file  // .collect() has been run
+    val run_name
+
+  output:
+    file merged_fragments
+    file merged_fragments_index
+
+  script:
+    merged_fragments = run_name + '_fragments_allAntibodies.tsv.gz'
+    merged_fragments_index = merged_fragments + '.tbi'
+    """
+    zcat $fragment_file | bedtools sort - /dev/stin | bgzip -c > ${merged_fragments}
+    tabix -p bed ${merged_fragments}
     """
 
   stub:

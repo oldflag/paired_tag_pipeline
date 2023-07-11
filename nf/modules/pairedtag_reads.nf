@@ -2,6 +2,41 @@
  * Modules for parsing / annotating / handling PairedTag reads
  */
 
+/*
+ * Downsample fastQ files to the appropriate number of reads
+ *
+ * Config-defined parameters
+ * ---------------------------
+ *
+ */
+process downsample_fastqs {
+
+  input: 
+    tuple val(sequence_id), file(r1_fastq), file(r2_fastq), val(library_id)
+    val nreads
+
+  output:
+    tuple val(sequence_id), file(r1_downsample), file(r2_downsample), val(library_id)
+
+  script:
+    r1_downsample = "${r1_fastq}" - ".gz" - ".fq" - ".fastq" + "_ds.fq.gz"
+    r2_downsample = "${r2_fastq}" - ".gz" - ".fq" - ".fastq" + "_ds.fq.gz"
+    k = nreads * 4
+
+    """
+    zcat "${r1_fastq}" | head -n "${k}" | gzip -c > "${r1_downsample}"
+    zcat "${r2_fastq}" | head -n "${k}" | gzip -c > "${r2_downsample}"
+
+    """
+
+  stub:
+    r1_downsample = "${r1_fastq}" - ".gz" - ".fq" - ".fastq" + "_ds.fq.gz"
+    r2_downsample = "${r2_fastq}" - ".gz" - ".fq" - ".fastq" + "_ds.fq.gz"
+    """
+    touch "${r1_downsample}" "${r2_downsample}"
+
+    """ 
+}
 
 /*
  * Apply the paired-tag R2 parser to an R2 of a paired-tag
