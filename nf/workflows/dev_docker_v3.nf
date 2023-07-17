@@ -1,33 +1,15 @@
 nextflow.enable.dsl=2
 
 /*
- * PairedTag Pipeline - V2
+ * PairedTag Pipeline - V3
  */
 
 INSTRUCTIONS = """
 //INSTRUCTIONS
+Please see the following configuration file and update as needed.
+./config/dev_docker_v3_nextflow.config for DEV
+./config/prod_nextflow.config for PROD
 
-//PLEASE COPY AND PASTE THE FOLLOWING INTO THE FILE nextflow.config
-
-executor {
-  queueSize=6 
-}
-conda.enabled = true
-
-conda {
-  createTimeout = "120m"
-  cacheDir = "/cond"
-}
-
-params.RUN_NAME="<your run name>"
-params.LIBRARY_DIGEST_FILE="<your library digest>.csv"
-params.SAMPLE_DIGEST_FILE="<your sample digest>.csv"
-params.SPECIES="mm"  // replace with "hs" for human or "rn" for rat
-params.SPIKEIN_SPECIES="hs"  // replace with "mm" for mouse or "rn" for rat
-params.NO_SPIKEIN="no"  // replace with "yes" to tabulate, but not split, primary/spike reads
- 
-params.output_dir="/NAS1/test_runs/" // set to your desired output directory
-params.HOME_REPO="/home/chartl/repos/pipelines/" // set to the location of the pipelines repository
 """
 
 def varExists(vne) {
