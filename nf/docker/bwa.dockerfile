@@ -9,6 +9,8 @@ bwa and pysam"
 ADD ./envs/bwa.yaml .
 RUN micromamba install -y -n base -f bwa.yaml && \
     micromamba clean --all --yes
+RUN micromamba install -c conda-forge procps-ng -n base && \
+    micromamba clean --all --yes
 
 
 # FROM continuumio/miniconda3:latest

@@ -101,7 +101,7 @@ process star_aligner {
     antibody = input_fq1.split("__")[2]
     sample = input_fq1.split("__")[3]
     trim_report = prefix + ".trim_report.txt"
-    spikein_info = "${sequence_id}.${assay}.${seqtype}.spikein_info.txt"
+    spikein_info = "${sequence_id}.${assay}.${antibody}.${sample}.${seqtype}.spikein_info.txt"
     """
     touch "${outbam}" "${trim_report}" "${outbam_spike}" "${spikein_info}"
     """
@@ -180,7 +180,7 @@ process bwa_aligner {
     aln_bam = "${fq_pfx}.bam"
     aln_spike_bam = "${fq_pfx}_spike.bam"
     trim_report = "${fq_pfx}.trim_report.txt"
-    spikein_info = "${sequence_id}.${assay}.${seqtype}.spikein_info.txt"
+    spikein_info = "${sequence_id}.${assay}.${antibody}.${sample}.${seqtype}.spikein_info.txt"
     """
     touch "${aln_bam}" "${aln_spike_bam}" "${trim_report}" "${spikein_info}"
     """

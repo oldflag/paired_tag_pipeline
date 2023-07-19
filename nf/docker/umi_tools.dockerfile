@@ -8,6 +8,8 @@ LABEL description="This is a custom Docker Image for umi_tools, samtools and ann
 ADD ./envs/umi_tools.yaml .
 RUN micromamba install -y -n base -f umi_tools.yaml && \
     micromamba clean --all --yes
+RUN micromamba install -c conda-forge procps-ng -n base && \
+    micromamba clean --all --yes
 
 # FROM drtools/alpine-conda
 # FROM continuumio/miniconda3:latest

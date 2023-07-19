@@ -9,3 +9,5 @@ macs2, samtools and bedtools."
 ADD ./envs/macs2.yaml .
 RUN micromamba install -y -n base -f macs2.yaml && \
     micromamba clean --all --yes
+RUN micromamba install -c conda-forge procps-ng -n base && \
+    micromamba clean --all --yes
