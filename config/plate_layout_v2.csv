@@ -95,8 +95,6 @@ BC93,1,P1,93,7,9,H9
 BC94,1,P1,94,7,10,H10
 BC95,1,P1,95,7,11,H11
 BC96,1,P1,96,8,0,H12
-=======
-barcode,split,plate,plate_index,plate_row,plate_col,Well Position
 BC1,1,P1,0,0,0,A01
 BC5,1,P1,1,0,1,A02
 BC9,1,P1,2,0,2,A03

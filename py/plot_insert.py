@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 import pandas as pd
+import numpy as np
 from plotnine import ggplot, geom_point, geom_smooth, aes, geom_bar
 from plotnine import facet_grid, save_as_pdf_pages, facet_wrap
 
@@ -42,7 +43,7 @@ def main(ffile, opdf, primary_name):
     bscatter = ggplot(insert_mg[insert_mg['insert'] < 1000]) + \
                geom_point(aes(x='insert', y='normalized_count', color='antibody'),
                           size=0.1) + \
-               facet_grid("antibody~species")
+               facet_grid("antibody~species", scales='free')
 
     iprim = insert_mg[insert_mg['species'] == primary_name]
     pscatter = ggplot(iprim[iprim['insert'] < 1000]) + \
@@ -50,7 +51,14 @@ def main(ffile, opdf, primary_name):
                           size=0.1) + \
                facet_wrap('~ antibody')
 
-    save_as_pdf_pages([pbar, bscatter, pscatter], filename=opdf)
+    
+    isec = insert_mg[insert_mg['species'] != primary_name]
+    iscatter = ggplot(isec[(isec['insert'] < 1000) & (isec['normalized_count'] < np.percentile(isec['normalized_count'], 99))]) + \
+               geom_point(aes(x='insert', y='normalized_count', color='antibody'),
+                          size=0.1) + \
+               facet_wrap('~ antibody')
+
+    save_as_pdf_pages([pbar, bscatter, pscatter, iscatter], filename=opdf)
 
 
 if __name__ == '__main__':
