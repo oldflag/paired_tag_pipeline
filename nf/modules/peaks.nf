@@ -185,7 +185,7 @@ process chip_qc {
 
   input:
     tuple val(chipfile_id), file(bam_file), file(saf_file)
-    file py_dir
+    // file py_dir
 
   output:
     tuple val(chipfile_id), file(cell_stats), file(sample_stats)
@@ -222,7 +222,7 @@ process merge_chip_qc {
     file chipqc_sample  // expected that .collect() is run. 
     file chipqc_cell // expected that .collect() is run
     val output_base
-    file py_dir
+    // file py_dir
 
   output:
     file chipseq_merged_sample
@@ -254,7 +254,7 @@ process merge_chip_qc {
             tail -n +2 \$inf >> "${chipseq_merged_sample}"
         fi
     done < infiles
-    python "${py_dir}/chipqc_plots.py" "${chipseq_merged_cell}" "${chipseq_merged_sample}" "${chipseq_plots}"
+    python "${params.HOME_REPO}/py/chipqc_plots.py" "${chipseq_merged_cell}" "${chipseq_merged_sample}" "${chipseq_plots}"
     """
 
   stub:
