@@ -47,7 +47,7 @@ workflow PairedTagDNA {
        antibody_grp = dna_ch.map{ it -> tuple(it[4], it[1])}.groupTuple().map{ it -> tuple(it[0], it[1], params.RUN_NAME)}
 
        // call peaks
-       peaks = MACS2_multi(antibody_grp, genome)  // input: (antibody_name, bam_file_list, experiment_name)
+       peaks = MACS2_multi(antibody_grp, genome, params.genome_reference[genome], params.py_dir, params.sh_dir )  // input: (antibody_name, bam_file_list, experiment_name)
 
        // merge peaks prior to tagging
        mg_peaks = merge_saf(peaks[0].map{ it -> it[2]}.collect(), 'all_antibodies_' + genome)
@@ -59,27 +59,29 @@ workflow PairedTagDNA {
                             tuple(params.promoter_saf_file[genome], "EP", "SAF"),
                             tuple(params.genome_saf_file[genome], "GN", "SAF"),
                             mg_peaks.map{it -> tuple(it, "PK", "SAF")},
-                            tuple(file("input.6"), "NA", "NAN"))
+                            tuple(file("input.6"), "NA", "NAN"),
+                            params.py_dir)
 
        // strategy:  (antibody, assay, alignment, bam).join(antibody, saf).map(assay"_"antibody, alignment, bam, saf)
        qc_input = inner_join(tagged_ch.map{ it -> tuple(it[4], it[3], it[0], it[1]) },
                              peaks[0].map{ it -> tuple(it[3], it[2]) }).map{
                                  it -> tuple(it[2] + '_' + it[0] + '_' + it[1], it[3], it[4])}
  
-       qc_output = chip_qc(qc_input)
+       qc_output = chip_qc(qc_input, params.py_dir)
  
        // merge the files
        merge_chip_qc(qc_output.map{it -> it[2]}.collect(), 
                      qc_output.map{it -> it[1]}.collect(), 
-                     params.RUN_NAME + "_" + genome)
+                     params.RUN_NAME + "_" + genome,
+                     params.py_dir)
  
        bin_counts = dna_count(tagged_ch, "BN")
        peak_counts = peak_count(tagged_ch, "PK")
  
        bin_h5ad =  merge_bin(prep_h5_inputs(bin_counts[0], 3, "DNA_Q30_UMICount_per_bin_" + genome),
-                             params.SAMPLE_DIGEST)
+                             params.SAMPLE_DIGEST,params.py_dir)
        peak_h5ad = merge_peak(prep_h5_inputs(peak_counts[0], 3, "DNA_Q30_UMICount_per_peak_" + genome),
-                              params.SAMPLE_DIGEST)
+                              params.SAMPLE_DIGEST, params.py_dir)
     
   emit:
       peaks = peak_h5ad[0]

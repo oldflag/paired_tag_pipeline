@@ -91,6 +91,7 @@ process merge_counts {
   input:
       tuple file(count_files), val(file_header)
       file sample_digest_csv
+      file py_dir
 
   output:
       file merged_count_h5ad
@@ -104,7 +105,7 @@ process merge_counts {
       """
       zcat $count_files | awk 'FNR!=1 && \$1=="gene" {next;}{print}' | gzip -c > "${merged_count}"
 
-      python "${params.HOME_REPO}/py/count2h5ad.py" "${merged_count}" "${sample_digest_csv}" "${merged_count_h5ad}"
+      python "${py_dir}/count2h5ad.py" "${merged_count}" "${sample_digest_csv}" "${merged_count_h5ad}"
 
 
       """
@@ -133,6 +134,7 @@ process h5ad_qc {
     file rna_umi
     file dna_reads
     file dna_umi
+    file py_dir
 
   output:
     file out_pdf
@@ -144,7 +146,7 @@ process h5ad_qc {
     out_rna = (rna_umi.toString() - '.h5ad' + '.analysis.h5ad')
     out_dna = (dna_umi.toString() - '.h5ad' + '.analysis.h5ad')
     """
-    python "${params.HOME_REPO}/py/h5ad_qc.py" "${rna_reads}" "${rna_umi}" "${dna_reads}" "${dna_umi}" "${out_pdf}"
+    python "${py_dir}/h5ad_qc.py" "${rna_reads}" "${rna_umi}" "${dna_reads}" "${dna_umi}" "${out_pdf}"
     """
 
   stub:
@@ -168,6 +170,7 @@ process cluster_qc {
   input:
     file rna_umi
     file dna_umi
+    file py_dir
 
   output:
     file out_pdf
@@ -175,7 +178,7 @@ process cluster_qc {
   script:
     out_pdf = "${params.RUN_NAME}_cluster_qc.pdf"
     """
-    python "${params.HOME_REPO}/py/cluster_qc.py" "${dna_umi}" "${rna_umi}" "${out_pdf}"
+    python "${py_dir}/cluster_qc.py" "${dna_umi}" "${rna_umi}" "${out_pdf}"
     """
 
   stub:

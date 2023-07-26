@@ -31,7 +31,7 @@ workflow AlignPairedTag {
       pair_ch  // channel over read pairs: (seqid, fq1, fq2, lysid, type)
   main:
       type_ch = pair_ch.map{ it -> tuple(it[0], it[4])}
-      split_fqs = process_pairedtag(pair_ch.map{ it -> tuple(it[0], it[1], it[2], it[3])})
+      split_fqs = process_pairedtag(pair_ch.map{ it -> tuple(it[0], it[1], it[2], it[3])}, params.py_dir, params.combin_barcodes, params.sample_barcodes, params.linker_file)
       publishlogo(split_fqs[3])
       i=0
       j=0
@@ -48,21 +48,22 @@ workflow AlignPairedTag {
 
       // this is now a tuple of (seq_id, seq_type, fastq1, fastq2)
      
-      barcode_pdfs = barcode_qc(fqjoin.map{ it -> tuple(it[0], it[2]) }.groupTuple())
+      barcode_pdfs = barcode_qc(fqjoin.map{ it -> tuple(it[0], it[2]) }.groupTuple(), params.py_dir, params.plate_layout)
       publishbarcodeqc(barcode_pdfs)
       
       dna_fq = fqjoin.filter{ it[1] =~ /dna/ }.map{it -> tuple(it[0], it[2], it[3], it[1])}
-      dna_raw_bams = bwa_aligner(dna_fq)
+      dna_raw_bams = bwa_aligner(dna_fq, params.bwa_index[params.SPECIES], params.genome_reference[params.SPECIES], params.bwa_index[params.SPIKEIN_SPECIES],params.genome_reference[params.SPIKEIN_SPECIES], params.py_dir)
       
       rna_fq = fqjoin.filter{ it[1] =~ /rna/ }.map{it -> tuple(it[0], it[2], it[3], it[1])}
       //rna_fq.subscribe{ println(it) }
-      rna_raw_bams = star_aligner(rna_fq)
+      rna_raw_bams = star_aligner(rna_fq, params.star_index[params.SPECIES], params.star_index[params.SPIKEIN_SPECIES], params.py_dir)
+
       //rna_qc
       rnaqc_primary = rnaseqc_primary(rna_raw_bams[0].map{it -> tuple(it[0], it[1], it[3], it[4])},
                                       params.genome_gtf_collapsed_file[params.SPECIES])
       rnaqc_spike = rnaseqc_spike(rna_raw_bams[1].map{it -> tuple(it[0], it[1], it[3], it[4])},
                                   params.genome_gtf_collapsed_file[params.SPIKEIN_SPECIES])
-      rnaqc_mg = merge_rnaseqc(rnaqc_primary.mix(rnaqc_spike).map{it -> it[4]}.collect(), params.RUN_NAME)
+      rnaqc_mg = merge_rnaseqc(rnaqc_primary.mix(rnaqc_spike).map{it -> it[4]}.collect(), params.RUN_NAME, params.py_dir)
     
       publishrnaqc(rnaqc_mg[1])
     
@@ -83,7 +84,7 @@ workflow AlignPairedTag {
       publishalignmentqc(alignment_qcfile.mix(alignment_qcfile_spike))
     
       // fragments
-      fragfiles = bam_to_frag(dna_raw_bams[0].mix(dna_raw_bams[1]).map{ it -> it[1] })  // [0]: fragments [1]: index [2]: logs
+      fragfiles = bam_to_frag(dna_raw_bams[0].mix(dna_raw_bams[1]).map{ it -> it[1] }, params.py_dir)  // [0]: fragments [1]: index [2]: logs
       publishfragments(fragfiles[0])
       publishfraghist(fragfiles[4].collect(), params.RUN_NAME + '_fragment_sizes.txt')
       publishlogs(fragfiles[2].collect(), "gather_convert_fragments.log")

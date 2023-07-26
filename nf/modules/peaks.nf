@@ -83,6 +83,10 @@ process MACS2_multi {
   input:
     tuple val(antibody_name), file(bam_file), val(experiment_name)
     val genome_type
+    file genome_ref
+    file py_dir
+    file sh_dir
+    
 
   output:
     tuple val(experiment_name), file(merged_peaks), file(peaks_saf), val(antibody_name)
@@ -98,7 +102,7 @@ process MACS2_multi {
     peaks_saf = "${basename}_peaks_merged.saf"
     track_bw = "${basename}.bw"
     bamlist2 = bam_file.join(' --bam ')
-    genome_ref = params.genome_reference[genome_type]
+    // genome_ref = params.genome_reference[genome_type]
     """
     # note - below will UMI-dedup and merge. This has been disabled for efficiency.
     #echo "${bamlist}" > bamlist.txt
@@ -127,7 +131,7 @@ process MACS2_multi {
         samtools index \$bfile
     done < bams.txt
     #BAMscale scale -k no -r unscaled -z 5 -j 5 -q 30 -o ./wigs -t 4 --bam $bamlist2
-    bash "${params.HOME_REPO}"/sh/make_tracks.bash bams.txt "${params.HOME_REPO}/py/bam2frag.py" "${track_bw}" "${genome_ref}.fai"
+    bash "${sh_dir}/make_tracks.bash bams.txt "${py_dir}/bam2frag.py" "${track_bw}" "${genome_ref}.fai"
     """
     
   stub:
@@ -185,7 +189,7 @@ process chip_qc {
 
   input:
     tuple val(chipfile_id), file(bam_file), file(saf_file)
-    // file py_dir
+    file py_dir
 
   output:
     tuple val(chipfile_id), file(cell_stats), file(sample_stats)
@@ -195,7 +199,7 @@ process chip_qc {
     sample_stats = "${chipfile_id}.antibQC_sample.txt"
     """
     samtools view -F 4 -h -b "${bam_file}" > mapped.bam
-    python "${params.HOME_REPO}/py/chipQC.py" mapped.bam "${saf_file}" "${cell_stats}" --sample_out "${sample_stats}"
+    python "${py_dir}/chipQC.py" mapped.bam "${saf_file}" "${cell_stats}" --sample_out "${sample_stats}"
     rm mapped.bam
     """
 
@@ -222,7 +226,7 @@ process merge_chip_qc {
     file chipqc_sample  // expected that .collect() is run. 
     file chipqc_cell // expected that .collect() is run
     val output_base
-    // file py_dir
+    file py_dir
 
   output:
     file chipseq_merged_sample
@@ -254,7 +258,7 @@ process merge_chip_qc {
             tail -n +2 \$inf >> "${chipseq_merged_sample}"
         fi
     done < infiles
-    python "${params.HOME_REPO}/py/chipqc_plots.py" "${chipseq_merged_cell}" "${chipseq_merged_sample}" "${chipseq_plots}"
+    python "${py_dir}/chipqc_plots.py" "${chipseq_merged_cell}" "${chipseq_merged_sample}" "${chipseq_plots}"
     """
 
   stub:

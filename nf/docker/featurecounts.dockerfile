@@ -11,6 +11,9 @@ RUN micromamba install -y -n base -f featurecounts.yaml && \
     micromamba clean --all --yes
 RUN micromamba install -c conda-forge procps-ng -n base && \
     micromamba clean --all --yes
+RUN micromamba install -c conda-forge ncurses -n base && \
+    micromamba clean --all --yes
+
 
 # FROM drtools/alpine-conda
 # FROM continuumio/miniconda3:latest

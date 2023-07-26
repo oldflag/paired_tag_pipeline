@@ -23,7 +23,8 @@ workflow PairedTagRNA {
                          tuple(file("input.3"), "NA", "NAN"),
                          tuple(file("input.4"), "NA", "NAN"),
                          tuple(file("input.5"), "NA", "NAN"),
-                         tuple(file("input.6"), "NA", "NAN"))
+                         tuple(file("input.6"), "NA", "NAN"),
+                         params.py_dir)
  
   
     // read and umi count with umi_tools based on a given tag //
@@ -34,7 +35,7 @@ workflow PairedTagRNA {
      }.groupTuple().map{ 
         it -> tuple(it[3].collect(), "RNA_Q30_UMICount_per_gene_" + genome)
     }
-    rna_umi_merged_h5ad = rna_merge_counts(r_umi_input, params.SAMPLE_DIGEST)
+    rna_umi_merged_h5ad = rna_merge_counts(r_umi_input, params.SAMPLE_DIGEST, params.py_dir)
   
   emit:
     rna_h5ad = rna_umi_merged_h5ad[0] 

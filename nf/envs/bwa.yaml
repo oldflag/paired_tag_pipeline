@@ -1,7 +1,7 @@
 name: bwa
 channels:
-  - defaults
   - conda-forge
+  - defaults
   - bioconda
 dependencies:
   - bwa

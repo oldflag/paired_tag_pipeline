@@ -18,6 +18,7 @@ process merge_rnaseqc {
   input:
     file metrics_csv  // called with .collect()
     val base_name
+    file py_dir
 
   output:
     file merged_metrics
@@ -38,7 +39,7 @@ process merge_rnaseqc {
          tail -n 1 "\${qcf}" | awk -v si=\$sn '{print \$1","si}' >> "${merged_metrics}"
      done < qclist.txt
 
-     python "${params.HOME_REPO}/py/plot_rnaseqc.py" "${merged_metrics}" "${metrics_plots}" --spikein
+     python "${py_dir}/plot_rnaseqc.py" "${merged_metrics}" "${metrics_plots}" --spikein
      """
 
    stub:

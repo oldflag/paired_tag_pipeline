@@ -23,12 +23,16 @@ process star_aligner {
   
     input:
       tuple val(sequence_id), file(fastq_trimmed1), file(fastq_trimmed2), val(seqtype)
+      path index_primary, stageAs:'temp/*'
+      path index_spike, stageAs:'temp2/*'
+      file py_dir
       
 
     output:
       tuple val(sequence_id), file(outbam), val(seqtype), val(assay), val(antibody)
       tuple val(sequence_id), file(outbam_spike), val(seqtype), val(assay), val(antibody)
       tuple val(sequence_id), file(spikein_info)
+      
    
 
   script: 
@@ -41,8 +45,8 @@ process star_aligner {
     antibody = input_fq1.split("__")[2]
     sample = input_fq1.split("__")[3]
     tmp_fq = "trimmed.fq"
-    index_primary = params.star_index[params.SPECIES]
-    index_spike = params.star_index[params.SPIKEIN_SPECIES]
+    // index_primary = params.star_index[params.SPECIES]
+    // index_spike = params.star_index[params.SPIKEIN_SPECIES]
     spikein_info = "${sequence_id}.${assay}.${seqtype}.spikein_info.txt"
     trim_report = prefix + ".trim_report.txt"
     if ( checkExists(params.NO_SPIKEIN) && params.NO_SPIKEIN == "yes" ) {
@@ -52,7 +56,7 @@ process star_aligner {
     }
     """
     cutadapt -a ${params.adapter_seq} -g ${params.universal_seq} -g ${params.transposase_seq} --times 2 -o ${tmp_fq} -j ${params.trim_ncores} -q ${params.trim_qual} -m 0 ${input_fq1} > ${trim_report}
-    python "${params.HOME_REPO}/py/filt_missing.py" $tmp_fq $fastq_trimmed2 r1_in.fq r2_in.fq
+    python "${py_dir}/filt_missing.py" $tmp_fq $fastq_trimmed2 r1_in.fq r2_in.fq
     #cat $tmp_fq | sed 's/^\$/N/g' | gzip -c > foo && mv foo "${tmp_fq}".gz
     rm $tmp_fq
     STAR --readFilesIn r1_in.fq r2_in.fq \\
@@ -79,7 +83,7 @@ process star_aligner {
     rm r1_in.fq r2_in.fq
     samtools sort -n "${prefix}_unsAligned.out.bam" -o "${prefix}_nameSorted.bam"
     samtools sort -n "${prefix}_spike_unsAligned.out.bam" -o "${prefix}_spike_nameSorted.bam"
-    python "${params.HOME_REPO}/py/assign_spikeins.py" \\
+    python "${py_dir}/assign_spikeins.py" \\
          "${prefix}_nameSorted.bam" \\
          "${prefix}_spike_nameSorted.bam" \\
          "${prefix}_uns.bam" \\
@@ -125,11 +129,17 @@ process bwa_aligner {
 
   input:
     tuple val(sequence_id), file(fq_file), file(fq_file2),val(seqtype)
+    path primary_bwa_index, stageAs:'temp/*'
+    file primary_ref 
+    path spike_bwa_index, stageAs:'temp2/*'
+    file spike_ref
+    file py_dir
 
   output:
     tuple val(sequence_id), file(aln_bam), val(seqtype), val(assay), val(antibody)
     tuple val(sequence_id), file(aln_spike_bam), val(seqtype), val(assay), val(antibody)
     tuple val(sequence_id), file(spikein_info)
+    
 
   script:
     fq_pfx = fq_file.simpleName
@@ -146,8 +156,8 @@ process bwa_aligner {
     trim_report = "${fq_pfx}.trim_report.txt"
     tmp_fq = "temp.fq"
     spikein_info = "${sequence_id}.${assay}.${seqtype}.spikein_info.txt"
-    primary_ref = params.genome_reference[params.SPECIES]
-    spike_ref = params.genome_reference[params.SPIKEIN_SPECIES]
+    // primary_ref = params.genome_reference[params.SPECIES]
+    // spike_ref = params.genome_reference[params.SPIKEIN_SPECIES]
     if ( checkExists(params.NO_SPIKEIN) && params.NO_SPIKEIN == "yes" ) {
         ext_args=" --duplicate_reads"
     } else {
@@ -155,12 +165,12 @@ process bwa_aligner {
     }
     """
     cutadapt -a ${params.adapter_seq} -o ${tmp_fq} -j ${params.trim_ncores} -q ${params.trim_qual} -m 0 ${fq_file} > ${trim_report} 
-    bwa mem -T 0 -h 1 -t "${params.alignment_ncore}" "${primary_ref}" "${tmp_fq}" "${fq_file2}" | samtools view -Shu - > primary.bam
-    bwa mem -T 0 -h 1 -t "${params.alignment_ncore}" "${spike_ref}" "${tmp_fq}" "${fq_file2}" | samtools view -Shu - > spike.bam
+    bwa mem -T 0 -h 1 -t "${params.alignment_ncore}" "${primary_bwa_index}/${primary_ref}" "${tmp_fq}" "${fq_file2}" | samtools view -Shu - > primary.bam
+    bwa mem -T 0 -h 1 -t "${params.alignment_ncore}" "${spike_bwa_index}/${spike_ref}" "${tmp_fq}" "${fq_file2}" | samtools view -Shu - > spike.bam
     rm "${tmp_fq}"
     samtools view -F 2048 -hb primary.bam | samtools sort -n -o "${init_bam}"
     samtools view -F 2048 -hb spike.bam | samtools sort -n -o "${init_spike_bam}"
-    python "${params.HOME_REPO}/py/assign_spikeins.py" "${init_bam}" "${init_spike_bam}" "${filt_bam}" "${filt_spike_bam}" --info "${spikein_info}" --seqtype dna ${ext_args}
+    python "${py_dir}/assign_spikeins.py" "${init_bam}" "${init_spike_bam}" "${filt_bam}" "${filt_spike_bam}" --info "${spikein_info}" --seqtype dna ${ext_args}
     rm ${init_bam} ${init_spike_bam} primary.bam spike.bam
     samtools sort "${filt_bam}" -o "${aln_bam}"
     samtools sort "${filt_spike_bam}" -o "${aln_spike_bam}"
@@ -248,6 +258,7 @@ process bam_to_frag {
   // conda params.HOME_REPO + '/nf/envs/bamtofrag.yaml'
   input:
     file bam_file
+    file py_dir
 
   output:
     file fragment_file
@@ -267,7 +278,7 @@ process bam_to_frag {
     samtools index $bam_file
     samtools view -H $bam_file | grep @SQ | sed 's/@SQ\tSN://g' | sed 's/LN://g' > genome.txt
     head genome.txt
-    python $params.HOME_REPO/py/bam2frag.py $bam_file $fragment_file --ncores $params.fragment_ncore --nocb --fragsize_hist "${pyfh}" | tee $fragment_log
+    python ${py_dir}/bam2frag.py $bam_file $fragment_file --ncores $params.fragment_ncore --nocb --fragsize_hist "${pyfh}" | tee $fragment_log
     zcat $fragment_file | bedtools sort -i /dev/stdin | bgzip -c > ${fragment_file}.tmp
     mv ${fragment_file}.tmp ${fragment_file}
     zcat "${fragment_file}" | awk '{print \$1"\t"\$2"\t"\$3"\t"\$4"\t.\t."}' > unsorted.bed

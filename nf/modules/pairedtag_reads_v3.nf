@@ -56,6 +56,10 @@ process parse_pairedtag_r2 {
 
   input:
     tuple val(sequence_id), file(r2_fastq), val(library_id)
+    file py_dir
+    file combin_barcodes
+    file sample_barcodes
+    file linker_file
 
   output:
     tuple val(sequence_id), file(barcode_csv)
@@ -64,7 +68,7 @@ process parse_pairedtag_r2 {
     barcode_csv = "${sequence_id}.barcodes.csv.gz"
 
     """
-    python "${params.py_dir}"/parse_R2.py --library_id "${library_id}" --threads "${params.r2_parse_threads}" --umi_size "${params.umi_len}" "${r2_fastq}" "${params.combin_barcodes}" "${params.sample_barcodes}" "${params.linker_file}" "${barcode_csv}"
+    python "${py_dir}"/parse_R2.py --library_id "${library_id}" --threads "${params.r2_parse_threads}" --umi_size "${params.umi_len}" "${r2_fastq}" "${combin_barcodes}" "${sample_barcodes}" "${linker_file}" "${barcode_csv}"
     """
 
   stub:
@@ -97,6 +101,10 @@ process process_pairedtag {
 
   input:
     tuple val(sequence_id), file(r1_fastq), file(r2_fastq), val(library_id)
+    file py_dir
+    file combin_barcodes
+    file sample_barcodes
+    file linker_file
 
   output:
     val sequence_id
@@ -108,8 +116,8 @@ process process_pairedtag {
     sequence_logo="${sequence_id}.logo.pdf"
     """
     mkdir -p out
-    python "${params.py_dir}/pull_linkers.py" "${r2_fastq}" "${sequence_logo}"
-    python "${params.py_dir}/split_pairedtag_v3.py" "${r1_fastq}" "${r2_fastq}" "${params.combin_barcodes}" "${params.sample_barcodes}" "${params.linker_file}" ./out/ --library_id "${library_id}" --threads "${params.r2_parse_threads}" --sequence_id "${sequence_id}" --umi_size "${params.umi_len}"
+    python "${py_dir}/pull_linkers.py" "${r2_fastq}" "${sequence_logo}"
+    python "${py_dir}/split_pairedtag_v3.py" "${r1_fastq}" "${r2_fastq}" "${combin_barcodes}" "${sample_barcodes}" "${linker_file}" ./out/ --library_id "${library_id}" --threads "${params.r2_parse_threads}" --sequence_id "${sequence_id}" --umi_size "${params.umi_len}"
     #for fqf in `ls out`; do
     #    gzip "out/\${fqf}" &
     #done
@@ -147,6 +155,8 @@ process barcode_qc {
   
   input:
     tuple val(sequence_id), file(tagged_fastq)  // using .collect()
+    file py_dir
+    file plate_layout
 
   output:
     tuple val(sequence_id), file(barcode_qc_pdf)
@@ -154,7 +164,7 @@ process barcode_qc {
   script:
     barcode_qc_pdf = "${sequence_id}.barcode_qc.pdf"
     """
-    python "${params.py_dir}"/barcode_qc.py $tagged_fastq --output_pdf "${barcode_qc_pdf}"
+    python "${py_dir}"/barcode_qc.py $tagged_fastq --output_pdf "${barcode_qc_pdf}" --plate_layout "${plate_layout}"
     """
 
   stub:
@@ -180,15 +190,19 @@ process barcode_qc {
 process split_annot_r1 {
   input:
     tuple val(sequence_id), file(r1_trim_fq), file(barcode_csv)
+    file py_dir
+    file combin_barcodes
+    file sample_barcodes
 
   output:
+  
     val sequence_id
     file 'out/*.fq.gz'
 
   script:
     """
     mkdir -p out
-    python "${params.py_dir}/annotate_split_R1.py" "${r1_trim_fq}" "${barcode_csv}" "${params.combin_barcodes}" "${params.sample_barcodes}" --outdir out --sequence_id "${sequence_id}" --noestimate
+    python "${py_dir}/annotate_split_R1.py" "${r1_trim_fq}" "${barcode_csv}" "${combin_barcodes}" "${sample_barcodes}" --outdir out --sequence_id "${sequence_id}" --noestimate
 
     nul=\$(zcat out/*__unknown__unlinked__1.fq.gz | wc -l)
     if [ "\${nul}" -lt "12" ]; then
@@ -222,12 +236,15 @@ process add_tags {
     tuple file(annot4_file), val(annot4_tag), val(annot4_fmt)
     tuple file(annot5_file), val(annot5_tag), val(annot5_fmt)
     tuple file(annot6_file), val(annot6_tag), val(annot6_fmt)
+    file py_dir
+
 
 
   output:
     tuple val(alignment_id), file(annot_bam_file), val(seqtype), val(assay_id), val(antibody)
 
   script:
+    
     annot_bam_file = bam_file.simpleName - '.bam' + '_tag.bam'
     sample_id=bam_file.simpleName.split('__')[3]
     """
@@ -257,9 +274,9 @@ process add_tags {
     fi
 
     if [ "\${tag_args}" == "" ]; then
-        python "${params.py_dir}"/add_tags.py "${bam_file}" "${annot_bam_file}" --library "${alignment_id}" --antibody "${antibody}" --assay_id "${assay_id}" --sample_id "${sample_id}"
+        python "${py_dir}"/add_tags.py "${bam_file}" "${annot_bam_file}" --library "${alignment_id}" --antibody "${antibody}" --assay_id "${assay_id}" --sample_id "${sample_id}"
     else
-        python "${params.py_dir}"/add_tags.py "${bam_file}" "${annot_bam_file}" --library "${alignment_id}" --antibody "${antibody}" --assay_id "${assay_id}" --sample_id "${sample_id}" \$tag_args
+        python "${py_dir}"/add_tags.py "${bam_file}" "${annot_bam_file}" --library "${alignment_id}" --antibody "${antibody}" --assay_id "${assay_id}" --sample_id "${sample_id}" \$tag_args
     fi
     """
 

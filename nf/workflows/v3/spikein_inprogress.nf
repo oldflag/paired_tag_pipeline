@@ -64,6 +64,7 @@ params.trim_qual = 20
 // parameters of R2 parsing
 params.linker_file = file(params.HOME_REPO + "/config/linkers.fa")
 params.combin_barcodes = file(params.HOME_REPO + "/config/well_barcode_v2_8bp.fa")
+params.plate_layout = file(params.HOME_REPO + '/config/plate_layout_v2.csv')
 params.sample_barcodes = params.SAMPLE_DIGEST
 params.umi_len = 10
 params.r2_parse_threads = 2
@@ -192,6 +193,7 @@ workflow {
    // this is now a tuple of (seq_id, seq_type, fastq)
   //fqjoin.map{it -> tuple(it[0], it[2])}.groupTuple().subscribe{println it}
   barcode_pdfs = barcode_qc(fqjoin.map{ it -> tuple(it[0], it[2]) }.groupTuple())
+
   publishbarcodeqc(barcode_pdfs)
    
   rna_fq = fqjoin.filter{ it[1] =~ /rna/ }.map{it -> tuple(it[0], it[2], it[1])}

@@ -34,6 +34,8 @@ if ( params.RUN_NAME == "<your run name>" ) {
 /*** CHANGE NOTHING BELOW HERE ***/
 
 params.py_dir = file(params.HOME_REPO + 'py')
+params.sh_dir = file(params.HOME_REPO + 'sh')
+params.r_dir = file(params.HOME_REPO + 'R')
 params.LIBRARY_DIGEST = file(params.LIBRARY_DIGEST_FILE)
 params.SAMPLE_DIGEST = file(params.SAMPLE_DIGEST_FILE)
 
@@ -47,6 +49,7 @@ params.trim_qual = 20
 // parameters of R2 parsing
 params.linker_file = file(params.HOME_REPO + "/config/linkers.fa")
 params.combin_barcodes = file(params.HOME_REPO + "/config/well_barcode_v2_8bp.fa")
+params.plate_layout = file(params.HOME_REPO + '/config/plate_layout_v2.csv')
 params.sample_barcodes = params.SAMPLE_DIGEST
 params.umi_len = 10
 params.r2_parse_threads = 2
@@ -65,6 +68,11 @@ params.genome_reference = [
 params.star_index = [
   "hs": file(params.GENOME_DIR + "/human/star_index/"),
   "mm": file(params.GENOME_DIR + "/mouse/star_index/")
+]
+
+params.bwa_index = [
+  "hs": file(params.GENOME_DIR + "/human/bwa_index/"),
+  "mm": file(params.GENOME_DIR + "/mouse/bwa_index/")
 ]
 
 params.genome_bin_file = [
