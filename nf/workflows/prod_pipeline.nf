@@ -10,6 +10,28 @@ Please see the following configuration file and update as needed.
 ./config/dev_docker_v3_nextflow.config for DEV
 ./config/prod_nextflow.config for PROD
 
+ // No spikein example
+    nextflow run ~/repos/pipelines/nf/workflows/prod_pipeline.nf 
+    -c ~/repos/pipelines/nf/workflows/config/prod_nextflow.config 
+    --RUN_NAME 'docker_v3_nosplikein_070192023' 
+    --LIBRARY_DIGEST_FILE '20221108_Altos_MiniSeq_LibraryDigest.csv' 
+    --SAMPLE_DIGEST_FILE '20221108_Altos_MiniSeq_SampleDigest.csv' 
+    --SPECIES 'mm' 
+    --output_dir 'publisher_20230719'
+    --NO_SPIKEIN 'yes'
+
+  // spikein example
+    nextflow run ~/repos/pipelines/nf/workflows/prod_pipeline.nf 
+    -c ~/repos/pipelines/nf/workflows/config/prod_nextflow.config 
+    --RUN_NAME 'dockerV3_spikein_R43_AD_May30' 
+    --LIBRARY_DIGEST_FILE 'R43_May30.library_digest.csv' 
+    --SAMPLE_DIGEST_FILE 'R43_May30.sample_digest.csv' 
+    --NO_SPIKEIN='no' 
+    --SPECIES 'hs' 
+    --SPIKEIN_SPECIES='mm' 
+    --output_dir 'publisher_20230727'
+
+
 """
 
 def varExists(vne) {

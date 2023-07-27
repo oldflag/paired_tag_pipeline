@@ -35,6 +35,8 @@ if ( params.RUN_NAME == "<your run name>" ) {
 /*** CHANGE NOTHING BELOW HERE ***/
 
 params.py_dir = file(params.HOME_REPO + 'py')
+params.sh_dir = file(params.HOME_REPO + 'sh')
+params.r_dir = file(params.HOME_REPO + 'R')
 params.LIBRARY_DIGEST = file(params.LIBRARY_DIGEST_FILE)
 params.SAMPLE_DIGEST = file(params.SAMPLE_DIGEST_FILE)
 
@@ -59,6 +61,16 @@ params.genome_name = [
   "mm": "GRCm39"
 ]
 
+params.genome_reference_dir = [
+  "hs": file(params.GENOME_DIR + "/human/"),
+  "mm": file(params.GENOME_DIR + "/mouse/")
+]
+
+params.genome_reference_name = [
+  "hs": "GRCh38.primary_assembly.genome.fa",
+  "mm": "GRCm39.primary_assembly.genome.fa.gz"
+]
+
 params.genome_reference = [
   "hs": file(params.GENOME_DIR + "/human/GRCh38.primary_assembly.genome.fa"),
   "mm": file(params.GENOME_DIR + "/mouse/GRCm39.primary_assembly.genome.fa.gz")
@@ -67,6 +79,11 @@ params.genome_reference = [
 params.star_index = [
   "hs": file(params.GENOME_DIR + "/human/star_index/"),
   "mm": file(params.GENOME_DIR + "/mouse/star_index/")
+]
+
+params.bwa_index = [
+  "hs": file(params.GENOME_DIR + "/human/bwa_index/"),
+  "mm": file(params.GENOME_DIR + "/mouse/bwa_index/")
 ]
 
 params.genome_bin_file = [
@@ -100,7 +117,7 @@ params.enhancer_saf_file = [
 ]
 
 params.alignment_ncore = 4
-params.fragment_ncore = 6
+params.fragment_ncore = 4
 params.ramsize = 5000000000
 params.count_ncores = 3
 params.fragment_ncores = 4
@@ -118,7 +135,6 @@ include {
   PairedTagRNA as PrimaryRNA;
   PairedTagRNA as SpikeRNA
 } from params.HOME_REPO + "/nf/workflows/v3/pairedtag_rna.nf"
-
 
 include { 
   publishData as publish_rna_h5;
