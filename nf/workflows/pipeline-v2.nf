@@ -12,6 +12,7 @@ INSTRUCTIONS = """
 executor {
   queueSize=6 
 }
+conda.enabled = true
 
 conda {
   createTimeout = "120m"
@@ -21,9 +22,9 @@ conda {
 params.RUN_NAME="<your run name>"
 params.LIBRARY_DIGEST_FILE="<your library digest>.csv"
 params.SAMPLE_DIGEST_FILE="<your sample digest>.csv"
-params.SPECIES="mm"  // replace with "hs" for human
+params.SPECIES="mm"  // replace with "hs" for human or "rn" for rat
  
-params.output_directory="/NAS1/test_runs/" // set to your desired output directory
+params.output_dir="/NAS1/test_runs/" // set to your desired output directory
 params.HOME_REPO="/home/chartl/repos/pipelines/" // set to the location of the pipelines repository
 """
 
@@ -61,18 +62,20 @@ params.trim_qual = 20
 
 // parameters of R2 parsing
 params.linker_file = file(params.HOME_REPO + "/config/linkers.fa")
-params.combin_barcodes = file(params.HOME_REPO + "/config/well_barcode_8bp.fa")
+params.combin_barcodes = file(params.HOME_REPO + "/config/well_barcode_v2_8bp.fa")
 params.sample_barcodes = params.SAMPLE_DIGEST
 params.umi_len = 10
 params.r2_parse_threads = 2
+params.fragment_ncore = 4
 
 if ( params.SPECIES == "hs" ) {
     // parameters of genome alignment
     params.genome_name = "GRCh38"
     params.genome_reference = file("/home/share/storages/2T/genome/human/GRCh38.primary_assembly.genome.fa")
+    params.bedtools_genome = file("/home/share/storages/2T/genome/human/GRCh38.primary_assembly.genome.fa.contigs")
     params.alignment_ncore = 4
     params.fragment_ncore = 6
-    params.ramsize = 2000000000
+    params.ramsize = 5000000000
     params.star_index = file("/home/share/storages/2T/genome/human/star_index/")
     params.genome_bin_file = file("/home/share/storages/2T/genome/human/GRCh38_5kb.saf")
     params.genome_saf_file = file("/home/share/storages/2T/genome/human/gencode.v39.annotation.saf")
@@ -85,9 +88,10 @@ if ( params.SPECIES == "hs" ) {
 } else {
     params.genome_name="GRCm39"
     params.genome_reference = file("/home/share/storages/2T/genome/mouse/GRCm39.primary_assembly.genome.fa.gz")
+    params.bedtools_genome = file("/home/share/storages/2T/genome/mouse/GRCm39.primary_assembly.genome.fa.contigs")
     params.star_index = file("/home/share/storages/2T/genome/mouse/star_index/")
     params.alignment_ncore = 4 
-    params.ramsize = 2000000000 
+    params.ramsize = 5000000000 
     params.genome_bin_file = file("/home/share/storages/2T/genome/mouse/GRCm39_5kb.saf")
     params.genome_saf_file = file("/home/share/storages/2T/genome/mouse/gencode.vM28.annotation.saf")
     params.genome_gtf_collapsed_file = file("/home/share/storages/2T/genome/mouse/gencode.vM28.annotation.collapsed.gtf") 
@@ -109,7 +113,10 @@ include { star_aligner_single;
           alignment_qc; 
           merge_alignment_qc;
           add_tags as tag_rna; 
-          add_tags as tag_dna } from params.HOME_REPO + '/nf/modules/alignment'
+          add_tags as tag_dna } from params.HOME_REPO + "/nf/modules/pairedtag_reads"
+include { star_aligner_single; bwa_aligner_single
+          alignment_qc; merge_alignment_qc;
+          bam_to_frag } from params.HOME_REPO + "/nf/modules/alignment"
 include { rnaseqc_call; merge_rnaseqc } from params.HOME_REPO + "/nf/modules/rnaseqc"
 include { umitools_count as rna_count; umitools_count as rna_bin_count;
           umitools_count as dna_count;
@@ -120,12 +127,13 @@ include { umitools_count as rna_count; umitools_count as rna_bin_count;
 include { annotate_reads_with_features as peak_annot; umitools_count as peak_count } from params.HOME_REPO + "/nf/modules/count"
 include { h5ad_qc; cluster_qc } from params.HOME_REPO + "/nf/modules/count"
 include { merge_bams as merge_dna_bams; merge_bams as merge_rna_bams } from params.HOME_REPO + "/nf/modules/alignment"
-include { MACS2_multi; merge_saf; chip_qc; merge_chip_qc } from params.HOME_REPO + "/nf/modules/peaks"
+include { MACS2_multi; merge_saf; chip_qc; merge_chip_qc} from params.HOME_REPO + "/nf/modules/peaks"
 include { publishData as publishdnabam; publishData as publishrnabam; 
           publishData as publishdnareadcount; publishData as publishdnaumicount; 
           publishData as publishrnareadcount; publishData as publishrnaumicount; 
           publishData as publishrnabinreadcount; publishData as publishrnabinumicount;
           publishData as publishdnapeakreadcount; publishData as publishdnapeakumicount;
+          publishData as publishfragments; catAndPublish as publishlogs;
           publishData as publishlogo;
           publishData as publishrnaqc;
           publishData as publishbarcodeqc;
@@ -134,7 +142,9 @@ include { publishData as publishdnabam; publishData as publishrnabam;
           publishData as publishh5adqc;
           publishData as publishclusterqc;
           publishData as publish10xrna;
-          publishData as publish10xdna } from params.HOME_REPO + "/nf/modules/publish" 
+          publishData as publish10xdna;
+          publishData as publishwigs;
+          publishData as publishtracks } from params.HOME_REPO + "/nf/modules/publish" 
 
 /* channel over rows of the digest */
 pair_ch = Channel.fromPath(params.LIBRARY_DIGEST).splitCsv(header: true, sep: ",").map{ row -> tuple(row.sequence_id, file(row.fastq1), file(row.fastq2), row.lysis_id, row.library_type)}
@@ -146,7 +156,9 @@ def inner_join(ch_a, ch_b) {
 
 workflow {
   // # note: params.SAMPLE_DIGEST is used implicitly here
+  //pair_ch.subscribe{ println(it) }
   split_fqs = process_pairedtag(pair_ch.map{ it -> tuple(it[0], it[1], it[2], it[3])})
+  //split_fqs[0].subscribe{ println(it) }
   publishlogo(split_fqs[2])
   i=0
   j=0
@@ -156,12 +168,12 @@ workflow {
   fqjoin = fastq_ids.join(fastq_subfiles).map{ it -> tuple(it[1], it[2])}
   fqjoin = fqjoin.join(type_ch).map{ it -> tuple(it[0], it[2], it[1])}
   fqjoin = fqjoin.transpose()
+  // fqjoin.subscribe{println(it)}
    // this is now a tuple of (seq_id, seq_type, fastq)
   //fqjoin.map{it -> tuple(it[0], it[2])}.groupTuple().subscribe{println it}
   barcode_pdfs = barcode_qc(fqjoin.map{ it -> tuple(it[0], it[2]) }.groupTuple())
   publishbarcodeqc(barcode_pdfs)
    
-
   rna_fq = fqjoin.filter{ it[1] =~ /rna/ }.map{it -> tuple(it[0], it[2], it[1])}
   dna_fq = fqjoin.filter{ it[1] =~ /dna/ }.map{it -> tuple(it[0], it[2], it[1])}
 
@@ -173,6 +185,13 @@ workflow {
   alignment_qcfile = merge_alignment_qc(bamqc.map{ it -> it[1]}.collect(), params.RUN_NAME)
   publishalignmentqc(alignment_qcfile)
 
+  // fragments
+  fragfiles = bam_to_frag(dna_rawbam.map{ it -> it[1] })  // [0]: fragments [1]: index [2]: logs [3]: bw
+  publishfragments(fragfiles[0])
+  publishwigs(fragfiles[3].collect())
+  publishlogs(fragfiles[2].collect(), "gather_convert_fragments.log")
+
+
   //rna_qc
   rnaqc = rnaseqc_call(rna_rawbam.map{it -> tuple(it[0], it[1], it[3], it[4])}, params.genome_gtf_collapsed_file)
   rnaqc_mg = merge_rnaseqc(rnaqc.map{it -> it[4]}.collect(), params.RUN_NAME)
@@ -182,11 +201,13 @@ workflow {
   // grouping by antibody - this is the 5th element of the tuple
   dna_byAB = dna_rawbam.map{ it -> tuple(it[4], it[1])}.groupTuple().map{ it -> tuple(it[0], it[1], params.RUN_NAME)}
   // peak calling per antibody and adding antibody name to peak name
+  
+  // combining all peaks for publication
   dna_peaks = MACS2_multi(dna_byAB)  // input: (antibody_name, bam_file_list, experiment_name)
   // output: (experiment, bed, saf, antibody)
-
-  // combining all peaks for publication
-  merged_saf = merge_saf(dna_peaks.map{it -> it[2]}.collect(), "all_antibodies")
+  // output[1]: wig file
+  merged_saf = merge_saf(dna_peaks[0].map{it -> it[2]}.collect(), "all_antibodies")
+  publishtracks(dna_peaks[1].collect())
 
 
   //filtering and tagging
@@ -205,7 +226,7 @@ workflow {
   // create (antibody, assay, sample, bam, antibody_peak)
   // strategy:  (antibody, assay, alignment, bam).join(antibody, saf).map(assay"_"antibody, alignment, bam, saf)
   chipqc_input = inner_join(dna_tagged.map{ it -> tuple(it[4], it[3], it[0], it[1])},
-    dna_peaks.map{ it -> tuple(it[3], it[2]) }
+    dna_peaks[0].map{ it -> tuple(it[3], it[2]) }
   ).map{it -> tuple(it[2] + "_" + it[0] + "_" + it[1], it[3], it[4])} // use the alignment id
   //chipqc_input.subscribe{ println(it) }
   chip_qc = chip_qc(chipqc_input)
@@ -222,14 +243,14 @@ workflow {
   
   // read and umi count with umi_tools based on a given tag //
   // DNA read and umi count per cell 
-  dna_counts = dna_count(dna_tagged[0], "BN")
+  dna_counts = dna_count(dna_tagged, "BN")
   // RNA read and umi count per cell per gene
-  rna_counts = rna_count(rna_tagged[0], "GN")
+  rna_counts = rna_count(rna_tagged, "GN")
   // RNA read and umi count per cell  
-  rna_bin_counts = rna_bin_count(rna_tagged[0], "BN")
+  rna_bin_counts = rna_bin_count(rna_tagged, "BN")
   
   // read and umi count based on peaks
-  peak_counts = peak_count(dna_tagged[0], "PK")
+  peak_counts = peak_count(dna_tagged, "PK")
 
 
   
@@ -271,8 +292,8 @@ workflow {
   //dna_seur = convert_dna_umi(dna_umi_merged_h5ad[0], params.genome_name)
   
   // publish results
-  publishdnabam(dna_tagged[0].map{ it -> it[0]})
-  publishrnabam(rna_tagged[0].map{ it -> it[0]})
+  publishdnabam(dna_tagged.map{ it -> it[1]})
+  publishrnabam(rna_tagged.map{ it -> it[1]})
   publishdnareadcount(dna_read_merged_h5ad[0])
   publishdnaumicount(dna_umi_merged_h5ad[0])
   publishrnareadcount(rna_read_merged_h5ad[0])

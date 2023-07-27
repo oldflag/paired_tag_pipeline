@@ -4,6 +4,7 @@ read tags for downstream processing.
 """
 from argparse import ArgumentParser
 from collections import Counter, OrderedDict
+from csv import DictReader
 import pysam
 
 
@@ -65,7 +66,7 @@ class TrackWindow(object):
         self.done_ = False
 
     def query(self, loc):
-        if loc is None or loc[1] == -1 or loc[0] not in self.refs:
+        if loc is None or loc[1] == -1 or loc[2] is None or loc[0] not in self.refs:
             return []
         if self.done_ and len(self.window) == 0:
             return []
@@ -103,7 +104,7 @@ class TrackOracle(object):
         for track in self.tracks_:
             hits = self.tracks_[track].query(loc)
             if hits:
-                tag_hits[track] = ','.join(hits)
+                tag_hits[track] = ','.join(sorted(set(hits)))
         return tag_hits
 
 
@@ -117,12 +118,17 @@ def get_args():
     parser.add_argument('--sample_id', help='The sample id', default=None)
     parser.add_argument('--track', help='A track to use, format: <filepath>:<tag>:<fmt>; can specify multiple times',
                         action='append')
+    parser.add_argument('--reachtools', help='Flag that the bam was produced by reachtools', action='store_true')
+    parser.add_argument('--sample_digest', help='The sample digest file - only needed with --reachtools', default=None)
+    parser.add_argument('--library_digest', help='The library digest file - only needed with --reachtools', default=None)
 
     return parser.parse_args()
 
 
-def main(args):
-    print(args)
+def parse_samples_pp(args):
+    """\
+    Parse samples from a pipelines-produced bam file
+    """
     if args.assay_id is None:
         handle = pysam.AlignmentFile(args.bam)
         sample_ids = Counter(
@@ -141,8 +147,40 @@ def main(args):
         sample_ids = {k: v[0] for k, v in best.items()}
     else:
         sample_ids = {'USER_SPEC': args.assay_id}
+    return sample_ids, None
 
-    print('Opening')
+
+def parse_samples_rt(args):
+    """\
+    Parse samples from a reachtools-produced bam file and aux files
+    """
+    assert args.sample_digest is not None
+    assert args.library_digest is not None
+    # read the library digest
+    lib_records = [x for x in DictReader(open(args.library_digest), delimiter=',')]
+    # get the sequence id from the bam file
+    bam2sid = {rec['bam'].split('/')[-1]: rec['sequence_id'] for rec in lib_records}
+    seq_id = bam2sid[args.bam.split('/')[-1]]
+    # for reachtools we want a map from the well to the assay id
+    assay2well, well2info = dict(), dict()
+    for rec in DictReader(open(args.sample_digest), delimiter=','):
+        if rec['sequence_id'] == seq_id:
+            wid = rec['dna_well']
+            wpad = ('0' if len(wid) < 2 else '') + wid
+            assay2well[rec['assay_id']] = wpad
+            well2info[wpad] = rec
+    return assay2well, well2info
+
+
+def parse_samples(args):
+    if args.reachtools:
+        return parse_samples_rt(args)
+    return parse_samples_pp(args)
+    
+
+def main(args):
+    print(args)
+    sample_ids, rt_assay_info = parse_samples(args)  # rt_assay_info only for ReachTools
     handle = pysam.AlignmentFile(args.bam)
     print('Loading header')
     header_dct = handle.header.as_dict()
@@ -176,10 +214,63 @@ def main(args):
         tracks = None
 
     outfile = pysam.AlignmentFile(args.out, mode='wb', header=header_dct)
+    transformer = transform_read_rt if args.reachtools else transform_read
+    transformer_args = {'assay_info': rt_assay_info} if args.reachtools else dict()
     for i, read in enumerate(handle):
-        print(i)
-        outfile.write(transform_read(read, i, sam2rg, args.library, args.antibody, tracks=tracks))
+        outfile.write(transformer(read, i, sam2rg, args.library, args.antibody, tracks=tracks, **transformer_args))
     outfile.close()
+
+
+def transform_read_rt(read, read_n, sbc_rg_map, library, antibody, assay_info, tracks=None):
+    """
+    Given a read of the form
+
+    (seq:...:prefix):WIDX1:WIDX2:SIDX:UMI
+
+    extract the UMI and barcode information and place it into the expected
+    read tags as follows:
+      MI -> UMI
+      BC -> assay_id
+      CR -> full barcode string
+      CB -> the full cell name (lib:anti:sam:bc1:bc2)
+      AB -> the antibody
+      XX -> the read number
+
+    And add the read to the appropriate read group. In addition, annotate
+    any overlapping tracks.
+
+    
+    Inputs:
+    -----------
+    read - a pysam AlignedSegment
+    read_n - the number of the read
+    sbc_rg_map - a dictionary of (assay) ids to read grop
+    library - the library to use [ignored]
+    antibody - the name of the antibody [ignored]
+    assay_info - a dictionary of sample well -> dict() containing the correct information
+    tracks - A TrackWindow object holding genomic tracks
+
+    Outputs:
+    -----------
+    transformed read - name reverted to the sequencer name, and tags updated
+    """
+    split_fields = read.query_name.split(':')
+    bc2, bc1, sm_well, umi = split_fields[-4:]
+    antibody, library = assay_info[sm_well]['antibody_name'], assay_info[sm_well]['library_id']
+    assay_id, sample_id = assay_info[sm_well]['assay_id'], assay_info[sm_well]['sample_id']
+    read.set_tag('BC', '%s:%s:%s:%s' % (umi, bc1, bc2, sm_well))
+    read.set_tag('CR', '%s:%s:%s:%s' % (umi, bc1, bc2, assay_id))
+    read.set_tag('CB', '%s:%s:%s:%s:%s' % (library, antibody, assay_id, bc1, bc2))
+    read.set_tag('MI', umi)
+    read.set_tag('AB', antibody)
+    read.set_tag('RG', sbc_rg_map[assay_id])
+    read.set_tag('XX', f'{read_n:09d}')
+    read.query_name = ':'.join(split_fields[:-4])
+    if tracks is not None:
+        tags = tracks.query(read)
+        for tag, value in tags.items():
+            read.set_tag(tag, value)
+    return read
 
 
 def transform_read(read, read_n, sbc_rg_map, library, antibody, tracks=None):
@@ -194,8 +285,7 @@ def transform_read(read, read_n, sbc_rg_map, library, antibody, tracks=None):
       MI -> umi
       BC -> raw sbc
       CR -> full barcode string
-      CB -> parsed BC1BC2
-      FC -> the full cell name (lib:anti:sam:bc1:bc2)
+      CB -> the full cell name (lib:anti:sam:bc1:bc2)
       XX -> the read number
 
     Also add the read to the appropriate read group
@@ -239,7 +329,7 @@ def transform_read(read, read_n, sbc_rg_map, library, antibody, tracks=None):
         #    pos_hash = '0' * (4 - len(pos_hash)) + pos_hash
         read.set_tag('MI', umi)
     read.set_tag('XX', f'{read_n:09d}')
-    read.query_name = rawname
+    #read.query_name = rawname
     if tracks is not None:
         tags = tracks.query(read)
         for tag, value in tags.items():

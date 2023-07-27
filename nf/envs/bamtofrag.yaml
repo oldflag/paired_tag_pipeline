@@ -1,0 +1,15 @@
+name: bamtofrag
+channels:
+  - defaults
+  - conda-forge
+  - bioconda
+dependencies:
+  - openssl>=1.0
+  - samtools
+  - pysam>=0.19
+  - bedtools
+  - tabix
+  - numpy
+  - bedtools
+  - ucsc-bedgraphtobigwig
+prefix: /home/app.dev1/anaconda3/envs/bamtofrag

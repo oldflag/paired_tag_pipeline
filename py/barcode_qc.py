@@ -10,7 +10,7 @@ def get_args():
     parser = ArgumentParser()
     parser.add_argument('annot_fq', help='The annotated fastq file', nargs='+')
     parser.add_argument('--output_pdf', help='The output qc pdf', default=None)
-    parser.add_argument('--plate_layout', help='The plate layout csv file', default='/home/chartl/repos/pipelines/config/plate_layout.csv')
+    parser.add_argument('--plate_layout', help='The plate layout csv file', default='/home/chartl/repos/pipelines/config/plate_layout_v2.csv')
 
     return parser.parse_args()
 
@@ -19,8 +19,10 @@ def main(args):
     libname = args.annot_fq[1].split('.fq')[0].split('/')[-1].split('__')[0]
     if args.output_pdf is None:
         outpdf = libname + '.barcode_qc.pdf'
+        outcsv = libname + '.barcode_qc.csv'
     else:
         outpdf = args.output_pdf
+        outcsv = args.output_pdf[:-4] + '.csv'
 
     def title(ttl):
         plt.title(ttl + '\nLibrary: %s' % libname)
@@ -50,6 +52,7 @@ def main(args):
     # plate heatmaps
     plate_table = pd.read_csv(args.plate_layout)
     barcode2info = {(row.barcode, row.split): (row.plate, row.plate_row, row.plate_col) for ix_, row in plate_table.iterrows()}
+    print(barcode2info)
 
     def get_info(bc_id, split, what='plate'):
         if bc_id == '*':
@@ -77,6 +80,7 @@ def main(args):
     str_A = 'assigned (%.1f%%)' % (100 * (1-r_unassign)) 
     str_U = 'unassigned (%.1f%%)' % (100 * r_unassign)
     records.loc[:, 'assignment'] = records.sample_cell.map(lambda x: str_U if '*' in x else str_A)
+    records.to_csv(outcsv, index=False)
     acounts = records.groupby('assignment')['reads'].sum().reset_index()
     pdf = PdfPages(outpdf)
     plt.bar(acounts.assignment, acounts.reads)
@@ -219,37 +223,38 @@ def main(args):
     dat.loc[:, 'well1'] = 96 * (dat.well1_plate - 1) + 12 * (dat.well1_row - 1) + (dat.well1_col - 1) + 1
     dat.loc[:, 'well2'] = 96 * (dat.well2_plate - 1) + 12 * (dat.well2_row - 1) + (dat.well2_col - 1) + 1
     # now the big-arse heatmaps
-    hm_dat = dat.groupby(['well1', 'well2'])['reads'].sum().reset_index()
-    hm_dat = hm_dat.pivot(index='well1', columns='well2', values='reads').fillna(0)
-    plt.figure(figsize=(16,16))
-    sbn.heatmap(hm_dat, annot=False, cmap='nipy_spectral')
-    title('Total Reads: Split Wells')
-    plt.tight_layout()
-    pdf.savefig()
-
-    hm_max = dat.groupby(['well1', 'well2'])['reads'].max().reset_index()
-    hm_max = hm_max.pivot(index='well1', columns='well2', values='reads').fillna(0)
-    plt.figure(figsize=(16,16))
-    sbn.heatmap(hm_max, annot=False, cmap='nipy_spectral')
-    title('Maximum Reads / Cell: Split Wells')
-    plt.tight_layout()
-    pdf.savefig()
-
-    plt.figure(figsize=(16,16))
-    sbn.heatmap(100 * (1 + hm_max)/(1 + hm_dat), annot=False, cmap='coolwarm')
-    title('% of reads belonging to best cell: Split wells')
-    plt.tight_layout()
-    pdf.savefig()
-
-    plt.figure(figsize=(16,16))
-    hm_dat = dat[dat.reads >= 2500].groupby(['well1', 'well2'])['reads'].count().reset_index()
-    if hm_dat.shape[0] >= 5:
+    if 'v2' not in args.plate_layout:
+        hm_dat = dat.groupby(['well1', 'well2'])['reads'].sum().reset_index()
         hm_dat = hm_dat.pivot(index='well1', columns='well2', values='reads').fillna(0)
-        sbn.heatmap(hm_dat, annot=False, cmap='gist_heat')
-        title('# Of samples achieiving >= 2,500 reads: Split wells')
+        plt.figure(figsize=(16,16))
+        sbn.heatmap(hm_dat, annot=False, cmap='nipy_spectral')
+        title('Total Reads: Split Wells')
         plt.tight_layout()
         pdf.savefig()
-
+    
+        hm_max = dat.groupby(['well1', 'well2'])['reads'].max().reset_index()
+        hm_max = hm_max.pivot(index='well1', columns='well2', values='reads').fillna(0)
+        plt.figure(figsize=(16,16))
+        sbn.heatmap(hm_max, annot=False, cmap='nipy_spectral')
+        title('Maximum Reads / Cell: Split Wells')
+        plt.tight_layout()
+        pdf.savefig()
+    
+        plt.figure(figsize=(16,16))
+        sbn.heatmap(100 * (1 + hm_max)/(1 + hm_dat), annot=False, cmap='coolwarm')
+        title('% of reads belonging to best cell: Split wells')
+        plt.tight_layout()
+        pdf.savefig()
+    
+        plt.figure(figsize=(16,16))
+        hm_dat = dat[dat.reads >= 2500].groupby(['well1', 'well2'])['reads'].count().reset_index()
+        if hm_dat.shape[0] >= 5:
+            hm_dat = hm_dat.pivot(index='well1', columns='well2', values='reads').fillna(0)
+            sbn.heatmap(hm_dat, annot=False, cmap='gist_heat')
+            title('# Of samples achieiving >= 2,500 reads: Split wells')
+            plt.tight_layout()
+            pdf.savefig()
+    
     pdf.close()
 
 

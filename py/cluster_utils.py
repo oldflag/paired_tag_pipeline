@@ -130,7 +130,7 @@ def blockwise_normalize_jaccard(Jm, Em, libs, nadj=500, winsor=99.0):
             R[np.ix_(idx, jdx)] = (Jm[np.ix_(idx, jdx)].ravel() - np.polyval(poly, Em[np.ix_(idx, jdx)].ravel())).reshape((k_i, k_j))
             R[np.ix_(jdx, idx)] = (Jm[np.ix_(jdx, idx)].ravel() - np.polyval(poly, Em[np.ix_(jdx, idx)].ravel())).reshape((k_j, k_i))
 
-    return (R - np.mean(R, axis=0))/np.std(R, axis=0)
+    return (R - np.mean(R, axis=0))/(1e-6 + np.std(R, axis=0))
 
 
 def normalize_jaccard_snapatac(Jm, Em, nadj=500, winsor=99.0):
@@ -148,7 +148,7 @@ def normalize_jaccard_snapatac(Jm, Em, nadj=500, winsor=99.0):
     R = (R - np.mean(R, axis=0))/np.std(R, axis=0)
     R[R > 5] = 5
     R[R < -5] = -5
-    R = (R - np.mean(R, axis=0))/np.std(R, axis=0)
+    R = (R - np.mean(R, axis=0))/(1e-6 + np.std(R, axis=0))
     return R
 
 
@@ -257,7 +257,7 @@ def jaccard_diagnostics(dn_adata, n_approx=500, winsor=99.0, title=''):
         plt.close()
 
     # final Laplace-style normalization
-    rs = 1 / np.sqrt(Jn.sum(axis=1))
+    rs = 1 / np.maximum(1e-6, np.sqrt(Jn.sum(axis=1)))
     Jn = np.dot(np.diag(rs), np.dot(Jn, np.diag(rs)))
 
     ix2 = np.random.choice(int(k*(k-1)/2),
@@ -288,6 +288,8 @@ def jaccard_diagnostics(dn_adata, n_approx=500, winsor=99.0, title=''):
         c = i % cc
         r = min(int(i/cc), rr) - 1
         ddf = bpdf[bpdf.assay1 == aid]
+        if len(assay_infos) == 1:
+            axs = [axs]
         if len(assay_infos) < 4:
             sbn.boxplot(data=ddf, x='assay2', y='jaccard', ax=axs[c])
             axs[c].set_title(aid, size=8)
@@ -341,11 +343,18 @@ def do_dna_cluster_(dat_dna_analysis, npc, drop_first=True, resolution=0.5,
     The input adata, updated with pca, umap, tsne slots; plus leiden clusters
     """
     # note that the `sparse` version is ordered small -> large
+    if np.isnan(dat_dna_analysis.obsp['jaccard']).any():
+        n_na = np.isnan(dat_dna_analysis.obsp['jaccard']).sum(axis=0).sum()
+        if n_na/(np.prod(dat_dna_analysis.obsp['jaccard'].shape)) > 0.1:
+            print('More than 10% NA, ending early')
+            return
+        else:
+            dat_dna_analysis.obsp['jaccard'][np.isnan(dat_dna_analysis.obsp['jaccard'])] = 1e-3
     U, s, Vt = sp.sparse.linalg.svds(dat_dna_analysis.obsp['jaccard'], k=npc + drop_first)
     if drop_first:
         U, Vt, s = U[:, -(npc+1):-1][:, ::-1], Vt[-(npc+1):-1, :][::-1], s[-(npc+1):-1][::-1]
     else:
-        U, Vt, s = U[:, -npc:][:, ::-1], Vt[-npc, :][::-1, :], s[-npc:][::-1]
+        U, Vt, s = U[:, -npc:][:, ::-1], Vt[-npc:, :][::-1, :], s[-npc:][::-1]
 
     dat_dna_analysis.obsm['X_pca'] = U
 
@@ -478,7 +487,9 @@ def cluster_antibody_dna(dat_dna, antibody, n_pcs=15, drop_first=1, min_bins=300
                                   (dat_dna.var.percentile <= max_bin_pct) &
                                   (dat_dna.var.counts >= min_cells_bin)]
 
-    print('Dropped %d bins' % (dat_dna.shape[1] - dat_dna_analysis.shape[1]))
+    print('Dropped %d bins; now %d' % (dat_dna.shape[1] - dat_dna_analysis.shape[1], dat_dna_analysis.shape[1]))
+    if dat_dna_analysis.shape[1] < 10:
+         return dat_dna
 
     axs[0, 1].scatter(dat_dna_analysis.var[dat_dna_analysis.var.analysis == 'retain'].percentile.values,
                       dat_dna_analysis.var[dat_dna_analysis.var.analysis == 'retain'].counts.values,
@@ -625,6 +636,8 @@ def select_cells(anndata, fallback_dna_umi=350, fallback_rna_umi=350, fallback_o
     The input anndata object with a new `keep_cell_` column
     """
     print('Selecting cells...')
+    print(anndata.shape)
+    print(anndata.obs.head())
     anndata.obs.loc[:, 'keep_cell_'] = False  # set all to false (to generate the column)
     for lysis_id in anndata.obs.lysis_id.unique():
         for assay_info in anndata.obs.assay_info.unique():

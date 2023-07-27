@@ -66,7 +66,7 @@ process star_aligner_single {
 
 
 process basic_bwa {
-  conda params.HOME_REPO + '/nf/envs/bwa.yaml'
+  // conda params.HOME_REPO + '/nf/envs/bwa.yaml'
 
   input:
     tuple val(sequence_id), val(fq1), val(fq2), val(fq3)
@@ -109,7 +109,7 @@ process basic_bwa {
 
 
 process trimming_bwa {
-  conda params.HOME_REPO + '/nf/envs/bwa.yaml'
+  // conda params.HOME_REPO + '/nf/envs/bwa.yaml'
 
   input:
     tuple val(sequence_id), val(fq1), val(fq2), val(fq3)
@@ -120,18 +120,19 @@ process trimming_bwa {
   script:
     bam="${sequence_id}.bam"
     int_bam="${sequence_id}.uns.bam"
+    trim_report = "${sequence_id}.trim_report.txt"
     """
     if [ "${fq2}" == "null" ]; then
         tmp_fq="trimmed.fq"
         mkfifo \$tmp_fq
-        cutadapt -a ${params.adapter_seq} -g ${params.universal_seq} -g ${params.transposase_seq} --times 2 -o ${fq1} -j ${params.trim_ncores} -q ${params.trim_qual} -m 25 ${input_fq1} > ${trim_report} &
+        cutadapt -a ${params.adapter_seq} -g ${params.universal_seq} -g ${params.transposase_seq} --times 2 -o ${fq1} -j ${params.trim_ncores} -q ${params.trim_qual} -m 25 ${fq1} > ${trim_report} &
         bwa mem -R "@RG\\tID:${sequence_id}.RG\\tSM:${sequence_id}\\tPL:UNK\\tPU:UNK}" \\
                 -t $params.alignment_ncore -k 17 $params.genome_reference \$tmp_fq | samtools sort -@ $params.alignment_ncore -o "${bam}"
         rm \$tmp_fq
     elif [ "${fq3}" == "null" ]; then
         tmp_fq1="tmp_r1.fq"
         tmp_fq2="tmp_r2.fq"
-        cutadapt -a ${params.adapter_seq} -g ${params.universal_seq} -g ${params.transposase_seq} --times 2 -o \${tmp_fq1} \${tmp_fq2} -j ${params.trim_ncores} -q ${params.trim_qual} -m 25 ${input_fq1} > ${trim_report} &
+        cutadapt -a ${params.adapter_seq} -g ${params.universal_seq} -g ${params.transposase_seq} --times 2 -o \${tmp_fq1} -p \${tmp_fq2} -j ${params.trim_ncores} -q ${params.trim_qual} -m 25 ${fq1} ${fq2} > ${trim_report} 
         bwa mem -R "@RG\\tID:${sequence_id}.RG\\tSM:${sequence_id}\\tPL:UNK\\tPU:UNK" \\
                 -t $params.alignment_ncore -k 17 $params.genome_reference \$tmp_fq1 \$tmp_fq2 | samtools sort -@ $params.alignment_ncore -o "${bam}"
         rm \$tmp_fq1 \$tmp_fq2
@@ -162,6 +163,7 @@ process trimming_bwa {
     """ 
 
  } 
+
 /*
  * This process defines a mechanism for aligning genomic dna
  * with bwa
@@ -332,63 +334,95 @@ process merge_alignment_qc {
     """
 } 
 
-process add_tags {
-  // conda params.HOME_REPO + '/nf/envs/bwa.yaml'
-  
+/*
+ * This process converts a .bam file into a Signac-compatible
+ * fragments file, ensures that it is sorted, block-compresses
+ * and indexes the fragments file.
+ *
+ * Config-defined parameters
+ * --------------------------
+ * HOME_REPO - the path to the home repository
+ * fragment_ncore - the number of cores to use
+ */
+process bam_to_frag {
+  // conda params.HOME_REPO + '/nf/envs/bamtofrag.yaml'
   input:
-    tuple val(alignment_id), file(bam_file), val(seqtype), val(assay_id), val(antibody)
-    tuple file(annot1_file), val(annot1_tag), val(annot1_fmt)
-    tuple file(annot2_file), val(annot2_tag), val(annot2_fmt)
-    tuple file(annot3_file), val(annot3_tag), val(annot3_fmt)
-    tuple file(annot4_file), val(annot4_tag), val(annot4_fmt)
-    tuple file(annot5_file), val(annot5_tag), val(annot5_fmt)
-    tuple file(annot6_file), val(annot6_tag), val(annot6_fmt)
-    file py_dir
-
+    file bam_file
 
   output:
-    tuple val(alignment_id), file(annot_bam_file), val(seqtype), val(assay_id), val(antibody)
+    file fragment_file
+    file fragment_index
+    file fragment_log
+    file wig_track
+    file fragsize_hist
 
   script:
-    annot_bam_file = bam_file.simpleName - '.bam' + '_tag.bam'
-    sample_id=bam_file.simpleName.split('__')[3]
+    fragment_file = (bam_file.toString() - '.bam') + '.frag.tsv.gz'
+    fragment_index = fragment_file + '.tbi'
+    fragment_log = fragment_file + '.log'
+    fragsize_hist = (bam_file.toString() - '.bam') + '.fragsize_hist.txt'
+    wig_track = (bam_file.toString() - '.bam') + '.bw'
     """
-    strip () {
-        echo "\${1%%.*}"
-    }
+    samtools index $bam_file
+    samtools view -H $bam_file | grep @SQ | sed 's/@SQ\tSN://g' | sed 's/LN://g' > genome.txt
+    python $params.HOME_REPO/py/bam2frag.py $bam_file $fragment_file --ncores $params.fragment_ncore --nocb | tee $fragment_log
+    zcat $fragment_file | bedtools sort -i /dev/stdin | bgzip -c > ${fragment_file}.tmp
+    mv ${fragment_file}.tmp ${fragment_file}
+    zcat "${fragment_file}" | awk '{print \$1"\t"\$2"\t"\$3"\t"\$4"\t.\t."}' > unsorted.bed
+    bedtools sort -i unsorted.bed > sorted.bed
+    bedtools genomecov -i sorted.bed -g genome.txt -bg > coverage.bg
+    bedGraphToBigWig coverage.bg genome.txt $wig_track
+    samtools view -f 3 "${bam_file}" | cut -f1,9 | awk '\$2 > 0 && \$2 < 2000' | tr '|' '\t' | awk '{print \$(NF-1)"\t"\$(NF)}' | sort | bash "${params.HOME_REPO}/sh/average.sh" /dev/stdin | cut -f2 | sort | uniq -c | awk '{print \$2"\t"\$1}' | sort -n -k1,1 > frags.tmp
+    cat frags.tmp | awk -v bam="${bam_file}" '{print bam"\t"\$1"\t"\$2}' > "${fragsize_hist}"
+    """
 
-    tag_args=""
-    if [  \$(strip "${annot1_file}") != "input" ]; then
-        tag_args="\${tag_args} --track ${annot1_file}:${annot1_tag}:${annot1_fmt}"
-    fi
-    
-    if [  \$(strip "${annot2_file}") != "input" ]; then
-        tag_args="\${tag_args} --track ${annot2_file}:${annot2_tag}:${annot2_fmt}"
-    fi
-    if [  \$(strip "${annot3_file}") != "input" ]; then
-        tag_args="\${tag_args} --track ${annot3_file}:${annot3_tag}:${annot3_fmt}"
-    fi
-    if [  \$(strip "${annot4_file}") != "input" ]; then
-        tag_args="\${tag_args} --track ${annot4_file}:${annot4_tag}:${annot4_fmt}"
-    fi
-    if [  \$(strip "${annot5_file}") != "input" ]; then
-        tag_args="\${tag_args} --track ${annot5_file}:${annot5_tag}:${annot5_fmt}"
-    fi
-    if [  \$(strip "${annot6_file}") != "input" ]; then
-        tag_args="\${tag_args} --track ${annot6_file}:${annot6_tag}:${annot6_fmt}"
-    fi
+   stub:
+    fragment_file = (bam_file.toString() - '.bam') + '.frag.tsv.gz'
+    fragment_index = fragment_file + '.tbi'
+    fragment_log = fragment_file + '.log'
+    wig_track = (bam_file.toString() - '.bam') + '.bw'
+    fragsize_hist = (bam_file.toString() - '.bam') + '.fragsize_hist.txt'
+    """
+    touch $fragment_file $fragment_log $fragment_index $wig_track $fragsize_hist
+    """
+}
 
-    if [ "\${tag_args}" == "" ]; then
-        python "${py_dir}"/add_tags.py "${bam_file}" "${annot_bam_file}" --library "${alignment_id}" --antibody "${antibody}" --assay_id "${assay_id}" --sample_id "${sample_id}"
-    else
-        python "${py_dir}"/add_tags.py "${bam_file}" "${annot_bam_file}" --library "${alignment_id}" --antibody "${antibody}" --assay_id "${assay_id}" --sample_id "${sample_id}" \$tag_args
-    fi
+
+/*
+ * This process merges multiple fragment files
+ *
+ * Config-defined parameters
+ * ------------
+ * HOME_REPO - the path to the home repository
+ */
+process merge_frag_files {
+  // conda $params.HOME_REPO + '/nf/envs/bamtofrag.yaml'
+
+  input:
+    file fragment_file  // .collect() has been run
+    val run_name
+
+  output:
+    file merged_fragments
+    file merged_fragments_index
+
+  script:
+    merged_fragments = run_name + '_fragments_allAntibodies.tsv.gz'
+    merged_fragments_index = merged_fragments + '.tbi'
+    """
+    zcat $fragment_file | bedtools sort - /dev/stin | bgzip -c > ${merged_fragments}
+    tabix -p bed ${merged_fragments}
     """
 
   stub:
-    annot_bam_file = bam_file.simpleName.replace('.bam', '_tag.bam')
+    merged_fragments = run_name + '_fragments_allAntibodies.tsv.gz'
+    merged_fragments_idnex = merged_fragments + '.tbi'
     """
-    touch "${annot_bam_file}"
+    touch $merged_fragments
+    touch $merged_fragments_index
     """
 }
+
+
+
 

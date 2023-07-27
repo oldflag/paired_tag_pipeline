@@ -27,6 +27,7 @@ process merge_rnaseqc {
    script:
      merged_metrics = base_name + '_RNASeQC_merged.csv'
      metrics_plots = base_name + '_RNASeQC_merged.pdf'
+
      """
      find . -name '*.csv' > qclist.txt
      hdr=0
@@ -82,7 +83,14 @@ process rnaseqc_call {
 
 
     """
-    rnaseqc $gtf_file $bam_file --sample $basename --coverage . --unpaired
+    num_fastq=\$(samtools view -H $bam_file | grep PG | grep ID:STAR | tr '\\t' '\\n' | grep CL: | sed 's/\\s\\+/\\n/g' | grep -c fq.gz)
+    echo "\${num_fastq}"
+    if [ "\${num_fastq}" -gt 1 ]; then
+       args=" --unpaired"
+    else
+       args=""
+    fi
+    rnaseqc $gtf_file $bam_file --sample $basename --coverage . $args
     cut -f1 "${metrics_tsv}" | sed 's/, /_/g' | tr '\n' ',' | sed 's/,\$/\\n/g' > "${metrics_csv}"
     cut -f2 "${metrics_tsv}" | sed 's/, /_/g' | tr '\n' ',' | sed 's/,\$/\\n/g' >> "${metrics_csv}"
     """

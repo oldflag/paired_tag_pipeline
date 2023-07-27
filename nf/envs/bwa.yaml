@@ -1,12 +1,12 @@
 name: bwa
 channels:
-  - defaults
   - conda-forge
+  - defaults
   - bioconda
 dependencies:
   - bwa
-  - openssl=1.0
+  - openssl>=1.0
   - samtools
-  - pysam
+  - pysam>=0.20.0
   - cutadapt
 prefix: /home/app.dev1/anaconda3/envs/bwa

@@ -38,7 +38,7 @@ process annotate_reads_with_features {
       --Rpath fc_out \
       -a "${annotation_file}" \
       -o "${count_file}" \
-      "${bam_file}" 2>&1 > "${fc_log}"
+      "${bam_file}" ${params.FC_ARGS} 2>&1 > "${fc_log}"
 
     samtools sort -n "fc_out/${bamname}.bam.featureCounts.bam" > tmp.bam
     samtools sort tmp.bam > "${annot_bam}"
@@ -95,7 +95,7 @@ process umitools_count {
         --per-gene \
         --gene-tag="${count_tag}" \
         --per-cell \
-        --mapping-quality 30 \
+        --mapping-quality 0 \
         --cell-tag-split=@ \
         -I "${annot_bam}" \
         -S "${umi_counts_txt}" 2>&1 > "${umi_log}"
@@ -109,7 +109,7 @@ process umitools_count {
         --gene-tag="${count_tag}" \
         --per-cell \
         --cell-tag-split=@ \
-        --mapping-quality 30 \
+        --mapping-quality 0 \
         -I "${annot_bam}" \
         -S "${read_counts_txt}" 2>&1 >> "${umi_log}"
         
@@ -151,7 +151,7 @@ process simple_feature_count {
       -T "${params.count_ncores}" \
       --verbose --Rpath fc_out \
       -a "${annotation_file}" -o "${count_file}" \
-      "${bam_file}" 2>&1 > "${fc_log}"
+      "${bam_file}" ${params.FC_ARGS} 2>&1 > "${fc_log}"
 
       """
 
@@ -163,6 +163,83 @@ process simple_feature_count {
       """
 }
 
+process annotate_multiple_features {
+  conda params.HOME_REPO + '/nf/envs/featurecounts.yaml'
+  input:
+    tuple val(sequence_id), file(bam_file), val(seqtype), val(assay_id), val(antibody)
+    tuple file(annotation_file1), val(annotation_type1), val(destination_tag1)
+    tuple file(annotation_file2), val(annotation_type2), val(destination_tag2)
+
+  output:
+    tuple val(sequence_id), file(merged_bam), val(seqtype), val(assay_id), val(antibody)
+    tuple val(sequence_id), file(count_file1), file(count_file2)
+    tuple file(fc_log), file(merge_log)
+
+  script:
+    bamname = bam_file.simpleName
+    annot_bam1 = bamname - '.bam' + '_annot1.bam'
+    annot_bam2 = bamname - '.bam' + '_annot2.bam'
+    count_file1 = bamname - '.bam' + '.fc_count.' + destination_tag1 + '.txt'
+    count_file2 = bamname - '.bam' + '.fc_count.' + destination_tag2 + '.txt'
+    fc_log = bamname - '.bam' + '_multi_annot.log'
+    merge_log = bamname - '.bam' + '_tag_merge.log'
+    merged_bam = bamname - '.bam' + '_multiAnnot.bam'
+    """
+    mkdir -p fc_out
+    featureCounts -F "${annotation_type1}" \
+      -O -Q 30 \
+      -T "${params.count_ncores}" \
+      --verbose -R BAM \
+      --Rpath fc_out \
+      -a "${annotation_file1}" \
+      -o "${count_file1}" \
+      "${bam_file}" ${params.FC_ARGS} 2>&1 > "${fc_log}"
+
+    samtools sort -n "fc_out/${bamname}.bam.featureCounts.bam" > tmp.bam
+    samtools sort tmp.bam > "${annot_bam1}"
+    rm "fc_out/${bamname}.bam.featureCounts.bam" tmp.bam
+
+    featureCounts -F "${annotation_type2}" \
+      -O -Q 30 \
+      -T "${params.count_ncores}" \
+      --verbose -R BAM \
+      --Rpath fc_out \
+      -a "${annotation_file2}" \
+      -o "${count_file2}" \
+      "${bam_file}" ${params.FC_ARGS} 2>&1 >> "${fc_log}"
+
+    samtools sort -n "fc_out/${bamname}.bam.featureCounts.bam" > tmp.bam 
+    samtools sort tmp.bam > "${annot_bam2}"
+    rm "fc_out/${bamname}.bam.featureCounts.bam" tmp.bam
+
+    pyf="${params.HOME_REPO}/py/combine_tags.py"
+
+    samtools index "${annot_bam1}"
+    samtools index "${annot_bam2}"
+
+    python "\${pyf}" "${annot_bam1}:XT:${destination_tag1}"  "${annot_bam2}:XT:${destination_tag2}" --drop XS "${merged_bam}" 2>&1 > "${merge_log}"
+
+
+    """
+
+  stub:
+    bamname = bam_file.simpleName
+    annot_bam1 = bamname - '.bam' + '_annot1.bam'
+    annot_bam2 = bamname - '.bam' + '_annot2.bam'
+    count_file1 = bamname - '.bam' + '.fc_count.' + destination_tag1 + '.txt'
+    count_file2 = bamname - '.bam' + '.fc_count.' + destination_tag2 + '.txt'
+    fc_log = bamname - '.bam' + '_multi_annot.log'
+    merge_log = bamname - '.bam' + '_tag_merge.log'
+    merged_bam = bamname - '.bam' + '_multiAnnot.bam'
+
+    """
+    touch "${count_file1}"
+    touch "${count_file2}"
+    touch "${merged_bam}"
+    touch "${fc_log}"
+    touch "${merge_log}"
+    """
+}
 
 /*
  * This module defines a process to merge multiple UMI and Read count files into one respectively 
@@ -218,11 +295,12 @@ process merge_counts {
  *   + HOME_REPO : the path to the home repository
  */
 process scanpy_to_signac {
-  conda params.HOME_REPO + '/nf/envs/seurat.yaml'
+  // conda params.HOME_REPO + '/nf/envs/seurat.yaml'
 
   input:
     file dna_h5ad
     val genome_name
+    file r_dir
 
   output:
     file dna_10x
@@ -230,7 +308,7 @@ process scanpy_to_signac {
   script:
     dna_10x = (dna_h5ad.toString() - '.h5ad' + '_10x_format.h5')
     """
-    Rscript $params.HOME_REPO/R/scanpy_to_10x.R $dna_h5ad $dna_10x $genome_name
+    Rscript ${r_dir}/scanpy_to_10x.R $dna_h5ad $dna_10x $genome_name
     """
 
   stub:
