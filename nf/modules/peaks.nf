@@ -45,7 +45,7 @@ process MACS2_peakcall {
       if [ "\${nl}" -eq "1" ]; then
           # just the header
           if [ "${params.macs_genome_type}" -eq "hs" ]; then
-              echo "nopeak	1	15000000	16000000	." >> ${peaks_saf}
+              echo "nopeak	chr1	15000000	16000000	." >> ${peaks_saf}
           else
               echo "nopeak	chr1	15000000	16000000	." >> ${peaks_saf}
           fi
@@ -83,7 +83,8 @@ process MACS2_multi {
   input:
     tuple val(antibody_name), file(bam_file), val(experiment_name)
     val genome_type
-    file genome_ref
+    file genome_dir
+    val genome_name
     file py_dir
     file sh_dir
     
@@ -119,8 +120,8 @@ process MACS2_multi {
       nl=\$(cat ${peaks_saf} | wc -l)
       if [ "\${nl}" -eq "1" ]; then
           # just the header
-          if [ "${genome_type}" -eq "hs" ]; then
-              echo "nopeak	1	15000000	16000000	." >> ${peaks_saf}
+          if [ "${genome_type}" == "hs" ]; then
+              echo "nopeak	chr1	15000000	16000000	." >> ${peaks_saf}
           else
               echo "nopeak	chr1	15000000	16000000	." >> ${peaks_saf}
           fi
@@ -131,7 +132,7 @@ process MACS2_multi {
         samtools index \$bfile
     done < bams.txt
     #BAMscale scale -k no -r unscaled -z 5 -j 5 -q 30 -o ./wigs -t 4 --bam $bamlist2
-    bash "${sh_dir}/make_tracks.bash bams.txt "${py_dir}/bam2frag.py" "${track_bw}" "${genome_ref}.fai"
+    bash "${sh_dir}/make_tracks.bash" bams.txt "${py_dir}/bam2frag.py" "${track_bw}" "${genome_dir}/${genome_name}.fai"
     """
     
   stub:
@@ -199,6 +200,7 @@ process chip_qc {
     sample_stats = "${chipfile_id}.antibQC_sample.txt"
     """
     samtools view -F 4 -h -b "${bam_file}" > mapped.bam
+    samtools index mapped.bam
     python "${py_dir}/chipQC.py" mapped.bam "${saf_file}" "${cell_stats}" --sample_out "${sample_stats}"
     rm mapped.bam
     """

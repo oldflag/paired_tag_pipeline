@@ -47,7 +47,7 @@ workflow PairedTagDNA {
        antibody_grp = dna_ch.map{ it -> tuple(it[4], it[1])}.groupTuple().map{ it -> tuple(it[0], it[1], params.RUN_NAME)}
 
        // call peaks
-       peaks = MACS2_multi(antibody_grp, genome, params.genome_reference[genome], params.py_dir, params.sh_dir )  // input: (antibody_name, bam_file_list, experiment_name)
+       peaks = MACS2_multi(antibody_grp, genome, params.genome_reference_dir[genome],params.genome_reference_name[genome], params.py_dir, params.sh_dir )  // input: (antibody_name, bam_file_list, experiment_name)
 
        // merge peaks prior to tagging
        mg_peaks = merge_saf(peaks[0].map{ it -> it[2]}.collect(), 'all_antibodies_' + genome)

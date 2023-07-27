@@ -60,6 +60,16 @@ params.genome_name = [
   "mm": "GRCm39"
 ]
 
+params.genome_reference_dir = [
+  "hs": file(params.GENOME_DIR + "/human/"),
+  "mm": file(params.GENOME_DIR + "/mouse/")
+]
+
+params.genome_reference_name = [
+  "hs": "GRCh38.primary_assembly.genome.fa",
+  "mm": "GRCm39.primary_assembly.genome.fa.gz"
+]
+
 params.genome_reference = [
   "hs": file(params.GENOME_DIR + "/human/GRCh38.primary_assembly.genome.fa"),
   "mm": file(params.GENOME_DIR + "/mouse/GRCm39.primary_assembly.genome.fa.gz")
@@ -106,7 +116,7 @@ params.enhancer_saf_file = [
 ]
 
 params.alignment_ncore = 4
-params.fragment_ncore = 6
+params.fragment_ncore = 4
 params.ramsize = 5000000000
 params.count_ncores = 3
 params.fragment_ncores = 4
