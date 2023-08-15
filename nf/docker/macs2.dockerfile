@@ -20,6 +20,6 @@ RUN micromamba install -c conda-forge ncurses -n base && \
 RUN git clone --recurse-submodules https://gitlab.com/epigenomeus_public/MACS.git ~/MACS
 # RUN pip install --upgrade pip
 # RUN pip install --upgrade setuptools
-RUN pip install ~/MACS
+RUN DEB_PYTHON_INSTALL_LAYOUT=deb_system pip install ~/MACS
 RUN alias macs2=macs3
 
