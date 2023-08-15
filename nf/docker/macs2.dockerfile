@@ -5,7 +5,13 @@ LABEL maintainer="hklim@epigenome.us"
 LABEL version="3.0"
 LABEL description="This is a custom Docker Image for \
 macs2, samtools and bedtools."
-
+USER root
+RUN whoami
+RUN apt-get update && apt-get install sudo
+RUN apt-get install -y git
+RUN apt-get install -y python3-pip
+USER mambauser
+RUN whoami
 ADD ./envs/macs2.yaml .
 RUN micromamba install -y -n base -f macs2.yaml && \
     micromamba clean --all --yes
@@ -13,4 +19,9 @@ RUN micromamba install -c conda-forge procps-ng -n base && \
     micromamba clean --all --yes
 RUN micromamba install -c conda-forge ncurses -n base && \
     micromamba clean --all --yes
+RUN git clone --recurse-submodules https://gitlab.com/epigenomeus_public/MACS.git
+# RUN pip install --upgrade pip
+# RUN pip install --upgrade setuptools
+RUN pip install /tmp/MACS
+RUN alias macs2=macs3
 

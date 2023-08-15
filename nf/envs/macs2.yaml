@@ -7,7 +7,7 @@ dependencies:
   - conda-forge::ncurses
   - samtools
   - pysam
-  - macs2
+  # - macs2
   - numpy=1.22
   - bedtools
   - BAMscale
