@@ -110,9 +110,9 @@ process MACS2_multi {
     #python "${params.HOME_REPO}"/py/macs2_merge.py bamlist.txt > "${filt_bam}"
     
     macs2 callpeak -t $bamlist -n "${basename}" --outdir . \
-       -q 0.1 -g "${genome_type}" --nomodel
+       -q 0.1 -g "${genome_type}" --nomodel || true
     macs2 callpeak -t $bamlist --broad -n "${basename}" --outdir . \
-       -q 0.1 -g "${genome_type}" --nomodel
+       -q 0.1 -g "${genome_type}" --nomodel  || true
 
     cat "${narrow_peaks}" "${broad_peaks}" | cut -f1-5 | bedtools sort -i /dev/stdin | bedtools merge -i /dev/stdin > "${merged_peaks}"
     echo "GeneID	Chr	Start	End	Strand" > "${peaks_saf}"
@@ -133,6 +133,7 @@ process MACS2_multi {
     done < bams.txt
     #BAMscale scale -k no -r unscaled -z 5 -j 5 -q 30 -o ./wigs -t 4 --bam $bamlist2
     bash "${sh_dir}/make_tracks.bash" bams.txt "${py_dir}/bam2frag.py" "${track_bw}" "${genome_dir}/${genome_name}.fai"
+    samtools merge $bam_file -o "${basename}_pb.bam"
     """
     
   stub:

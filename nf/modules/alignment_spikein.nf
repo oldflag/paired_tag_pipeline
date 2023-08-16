@@ -55,11 +55,11 @@ process star_aligner {
         ext_args=""
     }
     """
-    cutadapt -a ${params.adapter_seq} -g ${params.universal_seq} -g ${params.transposase_seq} --times 2 -o ${tmp_fq} -j ${params.trim_ncores} -q ${params.trim_qual} -m 0 ${input_fq1} > ${trim_report}
-    python "${py_dir}/filt_missing.py" $tmp_fq $fastq_trimmed2 r1_in.fq r2_in.fq
-    #cat $tmp_fq | sed 's/^\$/N/g' | gzip -c > foo && mv foo "${tmp_fq}".gz
-    rm $tmp_fq
-    STAR --readFilesIn r1_in.fq r2_in.fq \\
+    cutadapt -a ${params.adapter_seq} -g ${params.universal_seq} -g ${params.transposase_seq} --times 2 -o ${tmp_fq} -j ${params.trim_ncores} -q ${params.trim_qual} -m 20 ${input_fq1} > ${trim_report}
+    #python "${py_dir}/filt_missing.py" $tmp_fq $fastq_trimmed2 r1_in.fq r2_in.fq
+    cat ${tmp_fq} | sed 's/^\$/N/g' | awk 'BEGIN { RS = "@"; ORS = "" } index(\$2, ":rna|") { print "@" \$0 }' | gzip -c > foo && mv foo "${tmp_fq}"
+    #rm $tmp_fq
+    STAR --readFilesIn "${tmp_fq}" \\
         --runThreadN $params.alignment_ncore \\
         --twopassMode None \\
         --outSAMtype BAM Unsorted \\
@@ -69,7 +69,7 @@ process star_aligner {
         --genomeDir $index_primary \\
         --outSAMmultNmax 1 \\
         --outFileNamePrefix "${prefix}_uns"
-    STAR --readFilesIn r1_in.fq r2_in.fq \\
+    STAR --readFilesIn "${tmp_fq}" \\
         --runThreadN $params.alignment_ncore \\
         --twopassMode None \\
         --outSAMtype BAM Unsorted \\
@@ -80,7 +80,7 @@ process star_aligner {
         --outSAMmultNmax 1 \\
         --outFileNamePrefix "${prefix}_spike_uns"
     # star suffix: Aligned.sortedByCoord.out.bam
-    rm r1_in.fq r2_in.fq
+    #rm r1_in.fq r2_in.fq
     samtools sort -n "${prefix}_unsAligned.out.bam" -o "${prefix}_nameSorted.bam"
     samtools sort -n "${prefix}_spike_unsAligned.out.bam" -o "${prefix}_spike_nameSorted.bam"
     python "${py_dir}/assign_spikeins.py" \\
@@ -89,7 +89,8 @@ process star_aligner {
          "${prefix}_uns.bam" \\
          "${prefix}_spike_uns.bam" \\
          --info "${spikein_info}" \\
-         --seqtype rna ${ext_args}
+         --seqtype rna ${ext_args} \\
+         --unpaired
     rm "${prefix}_unsAligned.out.bam" "${prefix}_spike_unsAligned.out.bam" "${prefix}_nameSorted.bam" "${prefix}_spike_nameSorted.bam"
     samtools sort "${prefix}_uns.bam" -o "${outbam}"
     samtools sort "${prefix}_spike_uns.bam" -o "${outbam_spike}"
@@ -165,8 +166,17 @@ process bwa_aligner {
     }
     """
     cutadapt -a ${params.adapter_seq} -o ${tmp_fq} -j ${params.trim_ncores} -q ${params.trim_qual} -m 0 ${fq_file} > ${trim_report} 
-    bwa mem -T 0 -h 1 -t "${params.alignment_ncore}" "${primary_bwa_index}/${primary_ref}" "${tmp_fq}" "${fq_file2}" | samtools view -Shu - > primary.bam
-    bwa mem -T 0 -h 1 -t "${params.alignment_ncore}" "${spike_bwa_index}/${spike_ref}" "${tmp_fq}" "${fq_file2}" | samtools view -Shu - > spike.bam
+    zcat ${tmp_fq} | sed 's/^\$/N/g' | awk 'BEGIN { RS = "@"; ORS = "" } index(\$2, ":dna|") { print "@" \$0 }' | gzip -c > foo && mv foo "${tmp_fq}"
+    alen=\$(zcat "\${fq_file}" | awk 'NR % 4 == 2' | head -n 10 | awk 'BEGIN{tot=0}{tot += length(\$1)}END{print(tot/10)}'
+    # if the average read length is long enough, try to align in paired-end mode
+    if [ "\${alen}" -ge 120 ]; then
+      zcat ${fq_file2} | sed 's/^\$/N/g' | awk 'BEGIN { RS = "@"; ORS = "" } index(\$2, ":dna|") { print "@" \$0 }' | gzip -c > foo && mv foo read2.fq.gz
+      bwa mem -T 0 -h 1 -t "${params.alignment_ncore}" "${primary_bwa_index}/${primary_ref}" "${tmp_fq}" "read2.fq.gz" | samtools view -Shu - > primary.bam
+      bwa mem -T 0 -h 1 -t "${params.alignment_ncore}" "${spike_bwa_index}/${spike_ref}" "${tmp_fq}" "read2.fq.gz" | samtools view -Shu - > spike.bam
+    else
+      bwa mem -T 0 -h 1 -t "${params.alignment_ncore}" "${primary_bwa_index}/${primary_ref}" "${tmp_fq}" | samtools view -Shu - > primary.bam
+      bwa mem -T 0 -h 1 -t "${params.alignment_ncore}" "${spike_bwa_index}/${spike_ref}" "${tmp_fq}" | samtools view -Shu - > spike.bam
+    fi
     rm "${tmp_fq}"
     samtools view -F 2048 -hb primary.bam | samtools sort -n -o "${init_bam}"
     samtools view -F 2048 -hb spike.bam | samtools sort -n -o "${init_spike_bam}"

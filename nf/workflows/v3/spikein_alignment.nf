@@ -31,7 +31,7 @@ workflow AlignPairedTag {
       pair_ch  // channel over read pairs: (seqid, fq1, fq2, lysid, type)
   main:
       type_ch = pair_ch.map{ it -> tuple(it[0], it[4])}
-      split_fqs = process_pairedtag(pair_ch.map{ it -> tuple(it[0], it[1], it[2], it[3])}, params.py_dir, params.combin_barcodes, params.sample_barcodes, params.linker_file)
+      split_fqs = process_pairedtag(pair_ch.map{ it -> tuple(it[0], it[1], it[2], it[3])}.groupTuple(), params.py_dir, params.combin_barcodes, params.sample_barcodes, params.linker_file)
       publishlogo(split_fqs[3])
       i=0
       j=0

@@ -44,7 +44,7 @@ workflow PairedTagDNA {
   main:
        params.macs_genome_type = genome
        // group by antibody
-       antibody_grp = dna_ch.map{ it -> tuple(it[4], it[1])}.groupTuple().map{ it -> tuple(it[0], it[1], params.RUN_NAME)}
+       antibody_grp = dna_ch.map{ it -> tuple(it[4], it[1])}.filter{ ! it[0].contains("UNK")}.groupTuple().map{ it -> tuple(it[0], it[1], params.RUN_NAME)}
 
        // call peaks
        peaks = MACS2_multi(antibody_grp, genome, params.genome_reference_dir[genome],params.genome_reference_name[genome], params.py_dir, params.sh_dir )  // input: (antibody_name, bam_file_list, experiment_name)

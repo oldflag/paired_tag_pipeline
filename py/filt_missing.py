@@ -27,6 +27,9 @@ def main(r1_in, r2_in, r1_out, r2_out):
             if len(r1_lines[1]) <= 1:
                 r1_lines[1] = 'N\n'
                 r1_lines[3] = '!\n'
+            if len(r2_lines[1]) <= 1:
+                r2_lines[1] = 'N\n'
+                r2_lines[3] = '!\n'
             elif len(r1_lines[1]) < len(r1_lines[3]):
                 r1_lines[1] = r1_lines[1].strip() + 'N' * (len(r1_lines[3]) - len(r1_lines[1])) + '\n'
             elif len(r1_lines[1]) > len(r1_lines[3]):

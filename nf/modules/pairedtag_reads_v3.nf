@@ -114,10 +114,28 @@ process process_pairedtag {
 
   script:
     sequence_logo="${sequence_id}.logo.pdf"
+    n_duplicates=r1_fastq.size()
     """
     mkdir -p out
-    python "${py_dir}/pull_linkers.py" "${r2_fastq}" "${sequence_logo}"
-    python "${py_dir}/split_pairedtag_v3.py" "${r1_fastq}" "${r2_fastq}" "${combin_barcodes}" "${sample_barcodes}" "${linker_file}" ./out/ --library_id "${library_id}" --threads "${params.r2_parse_threads}" --sequence_id "${sequence_id}" --umi_size "${params.umi_len}"
+    linkerfq=\$(echo ${r2_fastq} | awk '{print \$1}')
+    python "${py_dir}/pull_linkers.py" "\${linkerfq}" "${sequence_logo}"
+
+    if [ "${n_duplicates}" -gt "0" ]; then
+        # this hijacks the downsampling naming convention to deal with merged fastqs
+        fq1=\$(echo ${r1_fastq} | awk '{print \$1}' | sed 's/.fastq.gz/_ds.fq.gz/g')
+        fq2=\$(echo ${r2_fastq} | awk '{print \$1}'  | sed 's/.fastq.gz/_ds.fq.gz/g')
+        mkfifo "\${fq1}"
+        mkfifo "\${fq2}"
+        cat ${r1_fastq} > "\${fq1}" &
+        cat ${r2_fastq} > "\${fq2}" &
+        libid=\$(echo $library_id | sed "s/^\\[//g" | sed "s/,.*//g")
+    else
+        fq1="${r1_fastq}"
+        fq2="${r2_fastq}"
+        libid="${library_id}"
+    fi
+
+    python "${py_dir}/split_pairedtag_v3.py" "\${fq1}" "\${fq2}" "${combin_barcodes}" "${sample_barcodes}" "${linker_file}" ./out/ --library_id "\${libid}" --threads "${params.r2_parse_threads}" --sequence_id "${sequence_id}" --umi_size "${params.umi_len}"
     #for fqf in `ls out`; do
     #    gzip "out/\${fqf}" &
     #done

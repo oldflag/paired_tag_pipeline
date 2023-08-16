@@ -16,6 +16,7 @@ def get_args():
     parser.add_argument('--seqtype', help='the sequence type', default='seq')
     parser.add_argument('--dump_counts', help='dump raw counts to this file', default=None)
     parser.add_argument('--duplicate_reads', help='Assign reads to both primary and spikein and do not filter')
+    parser.add_argument('--unpaired', action='store_true', help='No pairs in bam')
 
     return parser.parse_args()
 
@@ -25,7 +26,22 @@ def iterpairs(readsorted_bam):
     for r1, r2 in zip(rsb, rsb):
         yield (r1, r2)
 
+def iterreads(readsorted_bam):
+    for r1 in iter(readsorted_bam):
+        yield (r1, None)
+
+
+def iterbam(bam, is_paired):
+    if is_paired:
+        itr = iterpairs(bam)
+    else:
+        itr = iterreads(bam)
+    for j in itr:
+        yield j
+
 def good_mapping(r1, r2, min_qual):
+    if r2 is None:
+        return r1.is_mapped and r1.mapping_quality >= min_qual
     either_good = (r1.is_mapped and r1.mapping_quality >= min_qual) or \
                   (r2.is_mapped and r2.mapping_quality >= min_qual)
     both_sanity = True
@@ -55,7 +71,7 @@ def main(args):
     barcode_counts = defaultdict(_zcount)
     pbam = pysam.AlignmentFile(args.primary_bam)
     sbam = pysam.AlignmentFile(args.spike_bam)
-    for (r1_prime, r2_prime), (r1_spike, r2_spike) in zip(iterpairs(pbam), iterpairs(sbam)):
+    for (r1_prime, r2_prime), (r1_spike, r2_spike) in zip(iterbam(pbam, not args.unpaired), iterbam(sbam, not args.unpaired)):
         barcode = ':'.join(r1_prime.query_name.split('|')[-1].split(':')[1:3])
         barcode2 = ':'.join(r1_spike.query_name.split('|')[-1].split(':')[1:3])
         assert barcode == barcode2, (barcode, barcode2, r1_prime.query_name, r1_spike.query_name)
@@ -74,21 +90,25 @@ def main(args):
         barcode = ':'.join(r1_prime.query_name.split('|')[-1].split(':')[1:3])
         if args.duplicate_reads or barcode not in barcode_probas:   # branch 1: keep the reads in both bams
             opbam.write(r1_prime)
-            opbam.write(r2_prime)
             osbam.write(r1_spike)
-            osbam.write(r2_spike)
+            if not args.unpaired:
+                opbam.write(r2_prime)
+                osbam.write(r2_spike)
         else:   # branch 2: filter the reads
             if barcode_probas.get(barcode, 0) >= 0.7:
                 opbam.write(r1_prime)
-                opbam.write(r2_prime)
+                if not args.unpaired:
+                    opbam.write(r2_prime)
             elif barcode_probas.get(barcode, 1) <= 0.3:
                 osbam.write(r1_spike)
-                osbam.write(r2_spike)
+                if not args.unpaired:
+                    osbam.write(r2_spike)
             else:
                 opbam.write(r1_prime)
-                opbam.write(r2_prime)
                 osbam.write(r1_spike)
-                osbam.write(r2_spike)
+                if not args.unpaired:
+                    opbam.write(r2_prime)
+                    osbam.write(r2_spike)
     opbam.close()
     osbam.close() 
 
