@@ -11,6 +11,7 @@ def get_args():
     parser.add_argument('annot_fq', help='The annotated fastq file', nargs='+')
     parser.add_argument('--output_pdf', help='The output qc pdf', default=None)
     parser.add_argument('--plate_layout', help='The plate layout csv file', default='/home/chartl/repos/pipelines/config/plate_layout_v2.csv')
+    parser.add_argument('--lib_type', help='library type', default='dna')
 
     return parser.parse_args()
 
@@ -20,14 +21,18 @@ def main(args):
     if args.output_pdf is None:
         outpdf = libname + '.barcode_qc.pdf'
         outcsv = libname + '.barcode_qc.csv'
+        outcsv2 = libname + '.type_qc.csv' # type qc
+
     else:
         outpdf = args.output_pdf
         outcsv = args.output_pdf[:-4] + '.csv'
+        outcsv2 = args.output_pdf[:-4] + '2.csv' # type qc
 
     def title(ttl):
         plt.title(ttl + '\nLibrary: %s' % libname)
 
     counts = dict()
+    counts_type_by_sample = dict()
     for fastq in args.annot_fq:
         hdl = gzip.open(fastq, 'rt')
         for i, line in enumerate(hdl):
@@ -41,6 +46,7 @@ def main(args):
             else:
                 key = (vals[3], vals[1] + '.' + vals[2])
             counts[key] = 1 + counts.get(key, 0)
+            counts_type_by_sample[(vals[0], vals[-1])] = 1 + counts_type_by_sample.get((vals[0], vals[-1]), 0)
         hdl.close()
 
     records = pd.DataFrame([{
@@ -89,6 +95,23 @@ def main(args):
     plt.tight_layout()
     pdf.savefig()
     plt.figure()
+
+    # read type count (clossover)
+    counts_type_df = pd.DataFrame([{
+       'sample': k[0],
+       'type': k[1],
+       'reads': v} for k, v in counts_type_by_sample.items()])
+    counts_type_dic = counts_type_df.groupby('type')['reads'].sum().to_dict()
+    counts_type_df.to_csv(outcsv2, index=False)
+
+    plt.bar(range(len(counts_type_dic)), list(counts_type_dic.values()), tick_label=[key+' (%.1f%%)' % (value / sum(counts_type_dic.values()) * 100) for key, value in counts_type_dic.items()])
+    plt.ticklabel_format(axis='y', style='plain')
+
+    plt.tight_layout()
+    pdf.savefig()
+    plt.figure()
+
+    # valid vs invalid
 
     n_valid = records[(records.well1_plate != 999) & (records.assignment_valid == 'valid')].shape[0]
     n_invalid = records[(records.well1_plate != 999) & (records.assignment_valid == 'invalid')].shape[0]
