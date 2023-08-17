@@ -172,7 +172,7 @@ process barcode_qc {
   // conda params.HOME_REPO + '/nf/envs/skbio.yaml'
   
   input:
-    tuple val(sequence_id), file(tagged_fastq)  // using .collect()
+    tuple val(sequence_id), file(tagged_fastq), val(lib_type)  // using .collect()
     file py_dir
     file plate_layout
 
@@ -182,7 +182,7 @@ process barcode_qc {
   script:
     barcode_qc_pdf = "${sequence_id}.barcode_qc.pdf"
     """
-    python "${py_dir}"/barcode_qc.py $tagged_fastq --output_pdf "${barcode_qc_pdf}" --plate_layout "${plate_layout}"
+    python "${py_dir}"/barcode_qc.py $tagged_fastq --output_pdf "${barcode_qc_pdf}" --plate_layout "${plate_layout}" --lib_type "${lib_type}"
     """
 
   stub:

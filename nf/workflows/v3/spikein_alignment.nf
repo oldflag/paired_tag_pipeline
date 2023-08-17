@@ -48,7 +48,7 @@ workflow AlignPairedTag {
 
       // this is now a tuple of (seq_id, seq_type, fastq1, fastq2)
      
-      barcode_pdfs = barcode_qc(fqjoin.map{ it -> tuple(it[0], it[2]) }.groupTuple(), params.py_dir, params.plate_layout)
+      barcode_pdfs = barcode_qc(fqjoin.map{ it -> tuple(it[0], it[2], it[1]) }.groupTuple(), params.py_dir, params.plate_layout)
       publishbarcodeqc(barcode_pdfs)
       
       dna_fq = fqjoin.filter{ it[1] =~ /dna/ }.map{it -> tuple(it[0], it[2], it[3], it[1])}

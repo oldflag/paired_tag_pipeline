@@ -270,7 +270,7 @@ def parse_R2_barcodes(read, sw_l1, sw_l2, umi_bp, bc_bp, sn_bp,
     # the ers string consists of [typebp][RE seq]
     # if typebp is A, it is dna; T for rna; fallback is to use
     # the restriction enzyme sequence CCTGCAGG (dna) and GCGGCCGC (rna)
-    tr_ers = 'rna' if 'TCGA' in ers else 'dna' if 'GGCC' in ers else 'unk'
+    tr_ers = 'rna' if 'TGCA' in ers else 'dna' if 'GGCC' in ers else 'unk'
 
     return (read.name, f'{tr_umi}:{tr_bc1}:{tr_bc2}:{tr_sbc}:{tr_ers}',
             f'{umi}:{bc1}:{bc2}:{sbc}:{ers}')
@@ -296,7 +296,7 @@ def parse_R2_barcodes2(read, sw_l1, sw_l2, umi_bp, bc_bp, sn_bp,
     # the ers string consists of [typebp][RE seq]
     # if typebp is A, it is dna; T for rna; fallback is to use
     # the restriction enzyme sequence CCTGCAGG (dna) and GCGGCCGC (rna)
-    tr_ers = 'rna' if 'TCGA' in ers else 'dna' if 'GGCC' in ers else 'unk'
+    tr_ers = 'rna' if 'TGCA' in ers else 'dna' if 'GGCC' in ers else 'unk'
 
     return (read.name, f'{tr_umi}:{tr_bc1}:{tr_bc2}:{tr_sbc}:{tr_ers}',
             f'{umi}:{bc1}:{bc2}:{sbc}:{ers}', read.seq[eob:], read.qual[eob:])
