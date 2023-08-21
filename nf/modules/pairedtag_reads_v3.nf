@@ -128,11 +128,11 @@ process process_pairedtag {
         mkfifo "\${fq2}"
         cat ${r1_fastq} > "\${fq1}" &
         cat ${r2_fastq} > "\${fq2}" &
-        libid=\$(echo $library_id | sed "s/^\\[//g" | sed "s/,.*//g")
+        libid=\$(echo $library_id | sed "s/^\\[//g" | sed 's/\\]//g' | sed "s/,.*//g")
     else
         fq1="${r1_fastq}"
         fq2="${r2_fastq}"
-        libid="${library_id}"
+        libid=\$(echo $library_id | sed "s/^\\[//g" | sed 's/\\]//g')
     fi
 
     python "${py_dir}/split_pairedtag_v3.py" "\${fq1}" "\${fq2}" "${combin_barcodes}" "${sample_barcodes}" "${linker_file}" ./out/ --library_id "\${libid}" --threads "${params.r2_parse_threads}" --sequence_id "${sequence_id}" --umi_size "${params.umi_len}"
@@ -178,17 +178,20 @@ process barcode_qc {
 
   output:
     tuple val(sequence_id), file(barcode_qc_pdf)
+    tuple val(sequence_id), file(contam_file)
 
   script:
     barcode_qc_pdf = "${sequence_id}.barcode_qc.pdf"
+    contam_file = "${sequence_id}.barcode_qc.type_qc.csv"
     """
-    python "${py_dir}"/barcode_qc.py $tagged_fastq --output_pdf "${barcode_qc_pdf}" --plate_layout "${plate_layout}" --lib_type "${lib_type}"
+    MPLCONFIGDIR="/tmp" python "${py_dir}"/barcode_qc.py $tagged_fastq --output_pdf "${barcode_qc_pdf}" --plate_layout "${plate_layout}" --lib_type "${lib_type}"
     """
 
   stub:
     barcode_qc_pdf = "${sequence_id}.barcode_qc.pdf"
+    contam_file = "${sequence_id}.type_qc.csv"
     """
-    touch "${barcode_qc_pdf}"
+    touch "${barcode_qc_pdf}" "${contam_file}"
     """
 }
 

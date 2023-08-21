@@ -26,12 +26,13 @@ process star_aligner {
       path index_primary, stageAs:'temp/*'
       path index_spike, stageAs:'temp2/*'
       file py_dir
+      file sh_dir
       
 
     output:
       tuple val(sequence_id), file(outbam), val(seqtype), val(assay), val(antibody)
       tuple val(sequence_id), file(outbam_spike), val(seqtype), val(assay), val(antibody)
-      tuple val(sequence_id), file(spikein_info)
+      tuple val(sequence_id), file(spikein_info), file(dup_metrics), file(dup_metrics_spikein)
       
    
 
@@ -47,7 +48,9 @@ process star_aligner {
     tmp_fq = "trimmed.fq"
     // index_primary = params.star_index[params.SPECIES]
     // index_spike = params.star_index[params.SPIKEIN_SPECIES]
-    spikein_info = "${sequence_id}.${assay}.${seqtype}.spikein_info.txt"
+    spikein_info = "${sequence_id}.${assay}.${antibody}.${sample}.${seqtype}.spikein_info.txt"
+    dup_metrics = "${sequence_id}.${assay}.${antibody}.${sample}.${seqtype}.dup_metrics.txt"
+    dup_metrics_spikein = "${sequence_id}.${assay}.${antibody}.${sample}.${seqtype}.dup_spikein.txt"
     trim_report = prefix + ".trim_report.txt"
     if ( checkExists(params.NO_SPIKEIN) && params.NO_SPIKEIN == "yes" ) {
         ext_args=" --duplicate_reads"
@@ -57,23 +60,23 @@ process star_aligner {
     """
     cutadapt -a ${params.adapter_seq} -g ${params.universal_seq} -g ${params.transposase_seq} --times 2 -o ${tmp_fq} -j ${params.trim_ncores} -q ${params.trim_qual} -m 20 ${input_fq1} > ${trim_report}
     #python "${py_dir}/filt_missing.py" $tmp_fq $fastq_trimmed2 r1_in.fq r2_in.fq
-    cat ${tmp_fq} | sed 's/^\$/N/g' | awk 'BEGIN { RS = "@"; ORS = "" } index(\$2, ":rna|") { print "@" \$0 }' | gzip -c > foo && mv foo "${tmp_fq}"
+    cat ${tmp_fq} | sed 's/^\$/N/g' | awk 'BEGIN { RS = "@"; ORS = "" } index(\$1, ":rna|") { print "@" \$0 }' | gzip -c > foo && mv foo "${tmp_fq}.gz"
     #rm $tmp_fq
-    STAR --readFilesIn "${tmp_fq}" \\
+    STAR --readFilesIn "${tmp_fq}.gz" \\
         --runThreadN $params.alignment_ncore \\
         --twopassMode None \\
         --outSAMtype BAM Unsorted \\
-        --readFilesCommand cat \\
+        --readFilesCommand zcat \\
         --outSAMunmapped Within KeepPairs \\
         --limitBAMsortRAM $params.ramsize \\
         --genomeDir $index_primary \\
         --outSAMmultNmax 1 \\
         --outFileNamePrefix "${prefix}_uns"
-    STAR --readFilesIn "${tmp_fq}" \\
+    STAR --readFilesIn "${tmp_fq}.gz" \\
         --runThreadN $params.alignment_ncore \\
         --twopassMode None \\
         --outSAMtype BAM Unsorted \\
-        --readFilesCommand cat \\
+        --readFilesCommand zcat \\
         --outSAMunmapped Within KeepPairs \\
         --limitBAMsortRAM $params.ramsize \\
         --genomeDir $index_spike \\
@@ -95,6 +98,10 @@ process star_aligner {
     samtools sort "${prefix}_uns.bam" -o "${outbam}"
     samtools sort "${prefix}_spike_uns.bam" -o "${outbam_spike}"
     rm "${prefix}_uns.bam" "${prefix}_spike_uns.bam"
+    # compute alignment info
+    samtools view -F 4 "${outbam}" | "${sh_dir}/awkdecode" | uniq -c | awk -v bf="${outbam}" '{ total += \$1; if (\$1 > 1) dup += (\$1-1) } END { print bf","total","dup","100*dup/total}' >  "${dup_metrics}"
+    samtools view -F 4 "${outbam_spike}" | "${sh_dir}/awkdecode" | uniq -c | awk -v bf="${outbam}" '{ total += \$1; if (\$1 > 1) dup += (\$1-1) } END { print bf","total","dup","100*dup/total}' >  "${dup_metrics_spikein}"
+    
     """
 
   stub:
@@ -107,8 +114,10 @@ process star_aligner {
     sample = input_fq1.split("__")[3]
     trim_report = prefix + ".trim_report.txt"
     spikein_info = "${sequence_id}.${assay}.${antibody}.${sample}.${seqtype}.spikein_info.txt"
+    dup_metrics = "${sequence_id}.${assay}.${antibody}.${sample}.${seqtype}.dup_metrics.txt"
+    dup_metrics_spikein = "${sequence_id}.${assay}.${antibody}.${sample}.${seqtype}.dup_spikein.txt"
     """
-    touch "${outbam}" "${trim_report}" "${outbam_spike}" "${spikein_info}"
+    touch "${outbam}" "${trim_report}" "${outbam_spike}" "${spikein_info}" "${dup_metrics}" "${dup_metrics_spikein}"
     """
 }
 
@@ -135,11 +144,12 @@ process bwa_aligner {
     path spike_bwa_index, stageAs:'temp2/*'
     file spike_ref
     file py_dir
+    file sh_dir
 
   output:
     tuple val(sequence_id), file(aln_bam), val(seqtype), val(assay), val(antibody)
     tuple val(sequence_id), file(aln_spike_bam), val(seqtype), val(assay), val(antibody)
-    tuple val(sequence_id), file(spikein_info)
+    tuple val(sequence_id), file(spikein_info), file(dup_metrics), file(dup_metrics_spikein)
     
 
   script:
@@ -164,20 +174,24 @@ process bwa_aligner {
     } else {
         ext_args=""
     }
+    dup_metrics = "${sequence_id}.${assay}.${antibody}.${sample}.${seqtype}.dup_metrics.txt"
+    dup_metrics_spikein = "${sequence_id}.${assay}.${antibody}.${sample}.${seqtype}.dup_spikein.txt"
     """
     cutadapt -a ${params.adapter_seq} -o ${tmp_fq} -j ${params.trim_ncores} -q ${params.trim_qual} -m 0 ${fq_file} > ${trim_report} 
-    zcat ${tmp_fq} | sed 's/^\$/N/g' | awk 'BEGIN { RS = "@"; ORS = "" } index(\$2, ":dna|") { print "@" \$0 }' | gzip -c > foo && mv foo "${tmp_fq}"
-    alen=\$(zcat "\${fq_file}" | awk 'NR % 4 == 2' | head -n 10 | awk 'BEGIN{tot=0}{tot += length(\$1)}END{print(tot/10)}'
+    cat ${tmp_fq} | sed 's/^\$/N/g' | awk 'BEGIN { RS = "@"; ORS = "" } index(\$1, ":dna|") { print "@" \$0 }' | gzip -c > foo && mv foo "${tmp_fq}.gz"
+    alen=\$(zcat "${fq_file}" | awk 'NR % 4 == 2' | head -n 10 | awk 'BEGIN{tot=0}{tot += length(\$1)}END{print(tot/10)}')
     # if the average read length is long enough, try to align in paired-end mode
     if [ "\${alen}" -ge 120 ]; then
-      zcat ${fq_file2} | sed 's/^\$/N/g' | awk 'BEGIN { RS = "@"; ORS = "" } index(\$2, ":dna|") { print "@" \$0 }' | gzip -c > foo && mv foo read2.fq.gz
-      bwa mem -T 0 -h 1 -t "${params.alignment_ncore}" "${primary_bwa_index}/${primary_ref}" "${tmp_fq}" "read2.fq.gz" | samtools view -Shu - > primary.bam
-      bwa mem -T 0 -h 1 -t "${params.alignment_ncore}" "${spike_bwa_index}/${spike_ref}" "${tmp_fq}" "read2.fq.gz" | samtools view -Shu - > spike.bam
+      zcat ${fq_file2} | sed 's/^\$/N/g' | awk 'BEGIN { RS = "@"; ORS = "" } index(\$1, ":dna|") { print "@" \$0 }' | gzip -c > foo && mv foo read2.fq.gz
+      bwa mem -T 0 -h 1 -t "${params.alignment_ncore}" "${primary_bwa_index}/${primary_ref}" "${tmp_fq}.gz" "read2.fq.gz" | samtools view -Shu - > primary.bam
+      bwa mem -T 0 -h 1 -t "${params.alignment_ncore}" "${spike_bwa_index}/${spike_ref}" "${tmp_fq}.gz" "read2.fq.gz" | samtools view -Shu - > spike.bam
+      view_xargs="-f 64"
     else
-      bwa mem -T 0 -h 1 -t "${params.alignment_ncore}" "${primary_bwa_index}/${primary_ref}" "${tmp_fq}" | samtools view -Shu - > primary.bam
-      bwa mem -T 0 -h 1 -t "${params.alignment_ncore}" "${spike_bwa_index}/${spike_ref}" "${tmp_fq}" | samtools view -Shu - > spike.bam
+      bwa mem -T 0 -h 1 -t "${params.alignment_ncore}" "${primary_bwa_index}/${primary_ref}" "${tmp_fq}.gz" | samtools view -Shu - > primary.bam
+      bwa mem -T 0 -h 1 -t "${params.alignment_ncore}" "${spike_bwa_index}/${spike_ref}" "${tmp_fq}.gz" | samtools view -Shu - > spike.bam
+      view_xargs=""
     fi
-    rm "${tmp_fq}"
+    rm "${tmp_fq}.gz"
     samtools view -F 2048 -hb primary.bam | samtools sort -n -o "${init_bam}"
     samtools view -F 2048 -hb spike.bam | samtools sort -n -o "${init_spike_bam}"
     python "${py_dir}/assign_spikeins.py" "${init_bam}" "${init_spike_bam}" "${filt_bam}" "${filt_spike_bam}" --info "${spikein_info}" --seqtype dna ${ext_args}
@@ -189,6 +203,8 @@ process bwa_aligner {
     if [[ "\${d}" -lt 2 ]]; then
       exit 255
     fi
+    samtools view -F 4 "\${view_xargs}" "${aln_bam}" | "${sh_dir}/awkdecode" | uniq -c | awk -v bf="${aln_bam}" '{ total += \$1; if (\$1 > 1) dup += (\$1-1) } END { print bf","total","dup","100*dup/total}' >  "${dup_metrics}"
+    samtools view -F 4 "\${view_xargs}" "${aln_spike_bam}" | "${sh_dir}/awkdecode" | uniq -c | awk -v bf="${aln_spike_bam}" '{ total += \$1; if (\$1 > 1) dup += (\$1-1) } END { print bf","total","dup","100*dup/total}' >  "${dup_metrics_spikein}"
     """
 
   stub:
@@ -201,8 +217,10 @@ process bwa_aligner {
     aln_spike_bam = "${fq_pfx}_spike.bam"
     trim_report = "${fq_pfx}.trim_report.txt"
     spikein_info = "${sequence_id}.${assay}.${antibody}.${sample}.${seqtype}.spikein_info.txt"
+    dup_metrics = "${sequence_id}.${assay}.${antibody}.${sample}.${seqtype}.dup_metrics.txt"
+    dup_metrics_spikein = "${sequence_id}.${assay}.${antibody}.${sample}.${seqtype}.dup_spikein.txt"
     """
-    touch "${aln_bam}" "${aln_spike_bam}" "${trim_report}" "${spikein_info}"
+    touch "${aln_bam}" "${aln_spike_bam}" "${trim_report}" "${spikein_info}" "${dup_metrics}" "${dup_metrics_spikein}"
     """
 }
 

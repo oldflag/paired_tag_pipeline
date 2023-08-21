@@ -17,6 +17,8 @@ include {
   umitools_count as peak_count;
   merge_counts as merge_bin;
   merge_counts as merge_peak;
+  merge_counts as merge_bin_read;
+  merge_counts as merge_peak_read
 } from params.HOME_REPO + "/nf/modules/count_v3"
 
 include {
@@ -75,15 +77,24 @@ workflow PairedTagDNA {
                      params.RUN_NAME + "_" + genome,
                      params.py_dir)
  
-       bin_counts = dna_count(tagged_ch, "BN")
+       // these have both umi and read counts
+       bin_counts = dna_count(tagged_ch, "BN")  
        peak_counts = peak_count(tagged_ch, "PK")
  
        bin_h5ad =  merge_bin(prep_h5_inputs(bin_counts[0], 3, "DNA_Q30_UMICount_per_bin_" + genome),
                              params.SAMPLE_DIGEST,params.py_dir)
        peak_h5ad = merge_peak(prep_h5_inputs(peak_counts[0], 3, "DNA_Q30_UMICount_per_peak_" + genome),
                               params.SAMPLE_DIGEST, params.py_dir)
+
+       bin_read_h5 = merge_bin_read(prep_h5_inputs(bin_counts[0], 4, "DNA_Q30_READCount_per_bin_" + genome),
+                                    params.SAMPLE_DIGEST, params.py_dir)
+       peak_read_h5 = merge_peak_read(prep_h5_inputs(peak_counts[0], 4, "DNA_Q30_READCount_per_peak_" + genome),
+                                      params.SAMPLE_DIGEST, params.py_dir)
     
   emit:
-      peaks = peak_h5ad[0]
-      bins = bin_h5ad[0]
+      peak_umi_h5ad = peak_h5ad[0]
+      bin_umi_h5ad = bin_h5ad[0]
+      bin_read_h5ad = bin_read_h5[0]
+      peak_umi_h5ad = peak_read_h5[0]
+      
 }

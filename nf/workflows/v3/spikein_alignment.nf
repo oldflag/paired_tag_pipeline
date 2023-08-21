@@ -17,6 +17,9 @@ include { catAndPublishDF as publishspikeqc;
           publishData as publishlogo;
           catAndPublish as publishlogs;
           catAndPublish as publishfraghist;
+          publishData as publishcontam;
+          catAndPublish as publishdup_rna;
+          catAndPublish as publishdup_dna;
           publishData as publishrnaqc;
           publishData as publishbarcodeqc;
           publishData as publishalignmentqc;
@@ -31,6 +34,7 @@ workflow AlignPairedTag {
       pair_ch  // channel over read pairs: (seqid, fq1, fq2, lysid, type)
   main:
       type_ch = pair_ch.map{ it -> tuple(it[0], it[4])}
+      // pair_ch.subscribe{ println it }
       split_fqs = process_pairedtag(pair_ch.map{ it -> tuple(it[0], it[1], it[2], it[3])}.groupTuple(), params.py_dir, params.combin_barcodes, params.sample_barcodes, params.linker_file)
       publishlogo(split_fqs[3])
       i=0
@@ -42,21 +46,39 @@ workflow AlignPairedTag {
        // join them
       fqjoin = fastq_ids.join(fastq_r1files).map{ it -> tuple(it[0], it[1], it[2])}
       fqjoin = fqjoin.join(fastq_r2files).map{ it -> tuple(it[1], it[2], it[3]) }
+      // fqjoin.subscribe{ println it}
       fqjoin = fqjoin.join(type_ch).map{ it -> tuple(it[0], it[3], it[1], it[2]) }
+      // fqjoin.subscribe{ println it}
       fqjoin = fqjoin.transpose()
       // fqjoin.subscribe{ println it }
 
       // this is now a tuple of (seq_id, seq_type, fastq1, fastq2)
      
       barcode_pdfs = barcode_qc(fqjoin.map{ it -> tuple(it[0], it[2], it[1]) }.groupTuple(), params.py_dir, params.plate_layout)
-      publishbarcodeqc(barcode_pdfs)
+      publishbarcodeqc(barcode_pdfs[0])
+      publishcontam(barcode_pdfs[1])
       
       dna_fq = fqjoin.filter{ it[1] =~ /dna/ }.map{it -> tuple(it[0], it[2], it[3], it[1])}
-      dna_raw_bams = bwa_aligner(dna_fq, params.bwa_index[params.SPECIES], params.genome_reference[params.SPECIES], params.bwa_index[params.SPIKEIN_SPECIES],params.genome_reference[params.SPIKEIN_SPECIES], params.py_dir)
+      // dna_fq.subscribe{ println(it) }
+
+      dna_raw_bams = bwa_aligner(dna_fq, 
+                                 params.bwa_index[params.SPECIES], 
+                                 params.genome_reference[params.SPECIES], 
+                                 params.bwa_index[params.SPIKEIN_SPECIES],
+                                 params.genome_reference[params.SPIKEIN_SPECIES], 
+                                 params.py_dir,
+                                 params.sh_dir)
+      // the 2nd offset has (seq, spike_info, dup_info, dup_info_spike)
+      publishdup_dna(dna_raw_bams[2].map{ it[2] }.collect(), params.RUN_NAME + '.duplication_metrics.dna.csv')
       
       rna_fq = fqjoin.filter{ it[1] =~ /rna/ }.map{it -> tuple(it[0], it[2], it[3], it[1])}
       //rna_fq.subscribe{ println(it) }
-      rna_raw_bams = star_aligner(rna_fq, params.star_index[params.SPECIES], params.star_index[params.SPIKEIN_SPECIES], params.py_dir)
+      rna_raw_bams = star_aligner(rna_fq, 
+                                  params.star_index[params.SPECIES], 
+                                  params.star_index[params.SPIKEIN_SPECIES], 
+                                  params.py_dir,
+                                  params.sh_dir)
+      publishdup_rna(rna_raw_bams[2].map{ it[2]}.collect(), params.RUN_NAME + '.duplication_metrics.rna.csv')
 
       //rna_qc
       rnaqc_primary = rnaseqc_primary(rna_raw_bams[0].map{it -> tuple(it[0], it[1], it[3], it[4])},
@@ -84,7 +106,7 @@ workflow AlignPairedTag {
       publishalignmentqc(alignment_qcfile.mix(alignment_qcfile_spike))
     
       // fragments
-      fragfiles = bam_to_frag(dna_raw_bams[0].mix(dna_raw_bams[1]).map{ it -> it[1] }, params.py_dir)  // [0]: fragments [1]: index [2]: logs
+      fragfiles = bam_to_frag(dna_raw_bams[0].map{ it -> it[1] }, params.py_dir)  // [0]: fragments [1]: index [2]: logs
       publishfragments(fragfiles[0])
       publishfraghist(fragfiles[4].collect(), params.RUN_NAME + '_fragment_sizes.txt')
       publishlogs(fragfiles[2].collect(), "gather_convert_fragments.log")

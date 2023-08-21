@@ -5,8 +5,9 @@ include {
 } from params.HOME_REPO + "/nf/modules/pairedtag_reads_v3"
 
 include { 
-  umitools_count as rna_count; 
+  umitools_count as rna_count;
   merge_counts as rna_merge_counts; 
+  merge_counts as rna_merge_readcounts;
 } from params.HOME_REPO + "/nf/modules/count"
 
 
@@ -36,9 +37,16 @@ workflow PairedTagRNA {
         it -> tuple(it[3].collect(), "RNA_Q30_UMICount_per_gene_" + genome)
     }
     rna_umi_merged_h5ad = rna_merge_counts(r_umi_input, params.SAMPLE_DIGEST, params.py_dir)
+    r_read_input = rna_counts[0].map{it -> 
+        tuple(1, it[0], it[1], it[2], it[3])
+     }.groupTuple().map{ 
+        it -> tuple(it[4].collect(), "RNA_Q30_READCount_per_gene_" + genome)
+    }
+    rna_read_merged_h5ad = rna_merge_readcounts(r_read_input, params.SAMPLE_DIGEST, params.py_dir)
   
   emit:
-    rna_h5ad = rna_umi_merged_h5ad[0] 
+    rna_umi_h5ad = rna_umi_merged_h5ad[0]
+    rna_read_h5ad = rna_read_merged_h5ad[0]
 
 }
   

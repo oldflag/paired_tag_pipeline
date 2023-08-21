@@ -130,8 +130,8 @@ def main(args):
 
     base = args.outdir + '/'
     sample_fq_map = build_sample_fq_map(args.sample_manifest, list(sample_seqmap.values()), args.sequence_id)
-    sample_fq_map['*'] = ('%s_UNK__UNK__UNK__UNK_unmatched__1.fq' % args.library_id, 
-                          '%s_UNK__UNK__UNK__UNK_unmatched__2.fq' % args.library_id)
+    sample_fq_map['*'] = ('%s_UNK__UNK__UNK__UNK_unmatched__1.fq' % args.sequence_id, 
+                          '%s_UNK__UNK__UNK__UNK_unmatched__2.fq' % args.sequence_id)
     handle_map, gz_procs = dict(), list()
     for sm, (fq, fq2) in sample_fq_map.items():
         print('Creating %s for streaming %s' % (fq, sm))

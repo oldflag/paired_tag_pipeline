@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 from matplotlib import pyplot as plt
+from collections import Counter
 from matplotlib.backends.backend_pdf import PdfPages
 import pandas as pd
 import seaborn as sbn
@@ -22,17 +23,16 @@ def main(args):
         outpdf = libname + '.barcode_qc.pdf'
         outcsv = libname + '.barcode_qc.csv'
         outcsv2 = libname + '.type_qc.csv' # type qc
-
     else:
         outpdf = args.output_pdf
         outcsv = args.output_pdf[:-4] + '.csv'
-        outcsv2 = args.output_pdf[:-4] + '2.csv' # type qc
+        outcsv2 = args.output_pdf[:-4] + '.type_qc.csv'
 
     def title(ttl):
         plt.title(ttl + '\nLibrary: %s' % libname)
 
     counts = dict()
-    counts_type_by_sample = dict()
+    counts_type_by_sample = Counter()
     for fastq in args.annot_fq:
         hdl = gzip.open(fastq, 'rt')
         for i, line in enumerate(hdl):
@@ -41,12 +41,15 @@ def main(args):
             vals = line.strip().split('|')[1].split(':')
             if vals[0] == '*':
                 key = ('*', '*')
+                tkey = ('*', vals[-1])
             elif '*' in vals[1] or '*' in vals[2]:
                 key = (vals[3], '*')
+                tkey = (vals[3], vals[-1])
             else:
                 key = (vals[3], vals[1] + '.' + vals[2])
+                tkey = (vals[3], vals[-1])
             counts[key] = 1 + counts.get(key, 0)
-            counts_type_by_sample[(vals[0], vals[-1])] = 1 + counts_type_by_sample.get((vals[0], vals[-1]), 0)
+            counts_type_by_sample[tkey] += 1
         hdl.close()
 
     records = pd.DataFrame([{
@@ -58,7 +61,7 @@ def main(args):
     # plate heatmaps
     plate_table = pd.read_csv(args.plate_layout)
     barcode2info = {(row.barcode, row.split): (row.plate, row.plate_row, row.plate_col) for ix_, row in plate_table.iterrows()}
-    print(barcode2info)
+    #print(barcode2info)
 
     def get_info(bc_id, split, what='plate'):
         if bc_id == '*':

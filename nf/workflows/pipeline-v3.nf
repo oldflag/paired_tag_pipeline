@@ -52,6 +52,7 @@ if ( params.RUN_NAME == "<your run name>" ) {
 /*** CHANGE NOTHING BELOW HERE ***/
 
 params.py_dir = params.HOME_REPO + "py/"
+params.sh_dir = params.HOME_REPO + "sh/"
 params.LIBRARY_DIGEST = file(params.LIBRARY_DIGEST_FILE)
 params.SAMPLE_DIGEST = file(params.SAMPLE_DIGEST_FILE)
 
@@ -136,10 +137,14 @@ include {
 } from params.HOME_REPO + "/nf/workflows/v3/pairedtag_rna.nf"
 
 include { 
-  publishData as publish_rna_h5;
-  publishData as publish_dna_h5;
-  publishData as publish_rna_spike_h5;
-  publishData as publish_dna_spike_h5
+  publishData as publish_rna_umi_h5;
+  publishData as publish_dna_umi_h5;
+  publishData as publish_rna_umi_spike;
+  publishData as publish_dna_umi_spike;
+  publishData as publish_rna_read_h5;
+  publishData as publish_dna_read_h5;
+  publishData as publish_rna_read_spike;
+  publishData as publish_dna_read_spike
 } from params.HOME_REPO + "/nf/modules/publish"
 
 /* channel over rows of the digest */
@@ -151,8 +156,12 @@ workflow {
     spike_dna = SpikeDNA(aligned_bams[2], params.SPIKEIN_SPECIES)
     prime_rna = PrimaryRNA(aligned_bams[1], params.SPECIES)
     spike_rna = SpikeRNA(aligned_bams[3], params.SPIKEIN_SPECIES)
-    publish_rna_h5(prime_rna[0])
-    publish_dna_h5(prime_dna[0])
-    publish_rna_spike_h5(spike_rna[0])
-    publish_dna_spike_h5(spike_dna[0])
+    publish_rna_umi_h5(prime_rna[0])
+    publish_dna_umi_h5(prime_dna[0])
+    publish_rna_umi_spike(spike_rna[0])
+    publish_dna_umi_spike(spike_dna[0])
+    publish_rna_read_h5(prime_rna[1])
+    publish_dna_read_h5(prime_dna[2])
+    publish_rna_read_spike(spike_rna[1])
+    publish_dna_read_spike(spike_dna[1])
 }
