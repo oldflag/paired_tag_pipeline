@@ -1,0 +1,16 @@
+awk '{
+    # Initialize fields
+    ref = $3;
+    pos = $4;
+    mi = "NA";
+    cb = "NA";
+    for(i=1; i<=NF; i++) {
+        if($i ~ /^MI:Z:/) {
+            mi = substr($i,6);
+        }
+        if($i ~ /^CB:Z:/) {
+            cb = substr($i,6);
+        }
+    }
+    print ref, pos, mi, cb;
+}'
