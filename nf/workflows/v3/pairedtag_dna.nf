@@ -23,6 +23,7 @@ include {
 
 include {
   publishData as publishtracks
+  catAndPublish as publishdup_dna
 } from params.HOME_REPO + "/nf/modules/publish"
 
 
@@ -43,6 +44,7 @@ workflow PairedTagDNA {
   take:
        dna_ch  // dna over dna bam files
        genome // the genome abbrev (params.SPECIES)
+       suffix // any suffix (such as spike-in)
   main:
        params.macs_genome_type = genome
        // group by antibody
@@ -62,10 +64,13 @@ workflow PairedTagDNA {
                             tuple(params.genome_saf_file[genome], "GN", "SAF"),
                             mg_peaks.map{it -> tuple(it, "PK", "SAF")},
                             tuple(file("input.6"), "NA", "NAN"),
-                            params.py_dir)
+                            params.py_dir,
+                            params.sh_dir)
+
+       publishdup_dna(tagged_ch[1].map{ it[1]}.collect(), params.RUN_NAME + suffix + '.duplication_metrics.dna.csv')
 
        // strategy:  (antibody, assay, alignment, bam).join(antibody, saf).map(assay"_"antibody, alignment, bam, saf)
-       qc_input = inner_join(tagged_ch.map{ it -> tuple(it[4], it[3], it[0], it[1]) },
+       qc_input = inner_join(tagged_ch[0].map{ it -> tuple(it[4], it[3], it[0], it[1]) },
                              peaks[0].map{ it -> tuple(it[3], it[2]) }).map{
                                  it -> tuple(it[2] + '_' + it[0] + '_' + it[1], it[3], it[4])}
  
@@ -78,8 +83,8 @@ workflow PairedTagDNA {
                      params.py_dir)
  
        // these have both umi and read counts
-       bin_counts = dna_count(tagged_ch, "BN")  
-       peak_counts = peak_count(tagged_ch, "PK")
+       bin_counts = dna_count(tagged_ch[0], "BN")  
+       peak_counts = peak_count(tagged_ch[0], "PK")
  
        bin_h5ad =  merge_bin(prep_h5_inputs(bin_counts[0], 3, "DNA_Q30_UMICount_per_bin_" + genome),
                              params.SAMPLE_DIGEST,params.py_dir)

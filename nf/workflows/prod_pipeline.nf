@@ -169,10 +169,10 @@ pair_ch = Channel.fromPath(params.LIBRARY_DIGEST).splitCsv(header: true, sep: ",
 
 workflow {
     aligned_bams = AlignPairedTag(pair_ch)
-    prime_dna = PrimaryDNA(aligned_bams[0], params.SPECIES)
-    spike_dna = SpikeDNA(aligned_bams[2], params.SPIKEIN_SPECIES)
-    prime_rna = PrimaryRNA(aligned_bams[1], params.SPECIES)
-    spike_rna = SpikeRNA(aligned_bams[3], params.SPIKEIN_SPECIES)
+    prime_dna = PrimaryDNA(aligned_bams[0], params.SPECIES, "")
+    spike_dna = SpikeDNA(aligned_bams[2], params.SPIKEIN_SPECIES, "spikein")
+    prime_rna = PrimaryRNA(aligned_bams[1], params.SPECIES, "")
+    spike_rna = SpikeRNA(aligned_bams[3], params.SPIKEIN_SPECIES, "spikein")
     publish_rna_h5(prime_rna[0])
     publish_dna_h5(prime_dna[0])
     publish_rna_spike_h5(spike_rna[0])

@@ -18,8 +18,6 @@ include { catAndPublishDF as publishspikeqc;
           catAndPublish as publishlogs;
           catAndPublish as publishfraghist;
           publishData as publishcontam;
-          catAndPublish as publishdup_rna;
-          catAndPublish as publishdup_dna;
           publishData as publishrnaqc;
           publishData as publishbarcodeqc;
           publishData as publishalignmentqc;
@@ -66,19 +64,16 @@ workflow AlignPairedTag {
                                  params.genome_reference[params.SPECIES], 
                                  params.bwa_index[params.SPIKEIN_SPECIES],
                                  params.genome_reference[params.SPIKEIN_SPECIES], 
-                                 params.py_dir,
-                                 params.sh_dir)
-      // the 2nd offset has (seq, spike_info, dup_info, dup_info_spike)
-      publishdup_dna(dna_raw_bams[2].map{ it[2] }.collect(), params.RUN_NAME + '.duplication_metrics.dna.csv')
+                                 params.py_dir)
+                                 
+      // the 2nd offset has (seq, spike_info)
       
       rna_fq = fqjoin.filter{ it[1] =~ /rna/ }.map{it -> tuple(it[0], it[2], it[3], it[1])}
       //rna_fq.subscribe{ println(it) }
       rna_raw_bams = star_aligner(rna_fq, 
                                   params.star_index[params.SPECIES], 
                                   params.star_index[params.SPIKEIN_SPECIES], 
-                                  params.py_dir,
-                                  params.sh_dir)
-      publishdup_rna(rna_raw_bams[2].map{ it[2]}.collect(), params.RUN_NAME + '.duplication_metrics.rna.csv')
+                                  params.py_dir)
 
       //rna_qc
       rnaqc_primary = rnaseqc_primary(rna_raw_bams[0].map{it -> tuple(it[0], it[1], it[3], it[4])},

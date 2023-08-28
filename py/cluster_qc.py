@@ -22,7 +22,8 @@ def get_args():
     parser.add_argument('--batch', help='The batch for which to correct', default=None)
     parser.add_argument('--fallback_select', help='Only use count thresholds for selection', action='store_true')
     parser.add_argument('--dna_out', help='base name for the output DNA CSV files', default=None)
-    parser.add_argument('--fallback_umi', help='The fallback UMI', default=350, type=int)
+    parser.add_argument('--fallback_umi_rna', help='The fallback UMI', default=350, type=int)
+    parser.add_argument('--fallback_umi_dna', help='The fallback UMI', default=350, type=int)
     parser.add_argument('--min_rna_umi', type=int, help='Minimum RNA UMI', default=350)
     parser.add_argument('--max_rna_umi', type=int, help='Maximum RNA UMI', default=5000)
     parser.add_argument('--min_dna_umi', type=int, help='Minimum DNA UMI', default=500)
@@ -54,8 +55,8 @@ def main(args):
             if (obj.obs.antibody_name == 'NA').any():
                 dna_fallback = 0
             else:
-                dna_fallback = args.fallback_umi
-            obj = cu.select_cells(obj, fallback_rna_umi=args.fallback_umi, fallback_dna_umi=dna_fallback, fallback_only=args.fallback_select)
+                dna_fallback = args.fallback_umi_dna
+            obj = cu.select_cells(obj, fallback_rna_umi=args.fallback_umi_rna, fallback_dna_umi=dna_fallback, fallback_only=args.fallback_select)
             obj = obj[obj.obs.keep_cell_].copy()
             if args.good_cells_out:
                 obj.obs.to_csv(args.good_cells_out, index=False)
@@ -67,7 +68,7 @@ def main(args):
             obj = sc.read_h5ad(args.dna)
             map_assay(obj, args.map_assay)
             obj = obj[np.where(obj.obs.antibody_name != 'NA')[0], :]
-            obj = cu.select_cells(obj, fallback_dna_umi=args.fallback_umi, fallback_rna_umi=args.fallback_umi, fallback_only=args.fallback_select)
+            obj = cu.select_cells(obj, fallback_dna_umi=args.fallback_umi_dna, fallback_rna_umi=1, fallback_only=args.fallback_select)
             obj = obj[obj.obs.keep_cell_].copy()
             obj = cu.cluster_pairedtag_dna(obj, lim_features=1, lim_molecule=args.min_dna_umi, max_molecule=100000, harmonize=args.batch,
                                            n_pcs=10, min_cells_bin=50)
@@ -75,7 +76,17 @@ def main(args):
             if args.dna_out is not None:
                 for ab in obj.keys():
                     of = args.dna_out + '.' + ab + '.csv'
+                    bc = args.dna_out + '.' + ab + '.' + 'barcodes.csv'
                     obj[ab].obs.to_csv(of)
+                    # barcode - BC195:BC351:A1679000645773
+                    # atom - SRA2:H3K27me3:A1679000649344:BC371:BC135
+                    df = obj[ab].obs
+                    def a2b(s):
+                        u = s.split(':')
+                        return ':'.join((u[3], u[4], u[2]))
+                    df['barcode'] = df.atom_id.map(a2b)
+                    df[df['keep_cell_'] == 1][['barcode']].drop_duplicates().to_csv(bc, index=False)
+                    
     except ValueError:
         os.system('touch %s' % args.pdf)    
     

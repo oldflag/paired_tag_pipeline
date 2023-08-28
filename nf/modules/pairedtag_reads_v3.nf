@@ -98,6 +98,7 @@ process parse_pairedtag_r2 {
  */
 process process_pairedtag {
   // conda params.HOME_REPO + '/nf/envs/skbio.yaml'
+  maxForks=4
 
   input:
     tuple val(sequence_id), file(r1_fastq), file(r2_fastq), val(library_id)
@@ -114,11 +115,15 @@ process process_pairedtag {
 
   script:
     sequence_logo="${sequence_id}.logo.pdf"
-    n_duplicates=r1_fastq.size()
+    if ( r1_fastq.toString().contains("[") ) {
+      n_duplicates=r1_fastq.size()
+    } else {
+      n_duplicates=0
+    }
+    do_head="${params.TEST_RUN}"
     """
+    set -v
     mkdir -p out
-    linkerfq=\$(echo ${r2_fastq} | awk '{print \$1}')
-    python "${py_dir}/pull_linkers.py" "\${linkerfq}" "${sequence_logo}"
 
     if [ "${n_duplicates}" -gt "0" ]; then
         # this hijacks the downsampling naming convention to deal with merged fastqs
@@ -135,11 +140,33 @@ process process_pairedtag {
         libid=\$(echo $library_id | sed "s/^\\[//g" | sed 's/\\]//g')
     fi
 
+    if [ "${do_head}" == "yes" ]; then
+        if [ "${n_duplicates}" -gt "0" ]; then
+          # undo the concatenation setup to re-use the filenames
+          kill %
+          kill %  
+          rm -f "\${fq1}"
+          rm -f "\${fq2}"
+        fi
+
+        # create pipe downsampled fastqs using _ds suffix
+        fq1=\$(echo ${r1_fastq} | awk '{print \$1}' | sed 's/.fastq.gz/_ds.fq.gz/g')
+        fq2=\$(echo ${r2_fastq} | awk '{print \$1}' | sed 's/.fastq.gz/_ds.fq.gz/g')
+        echo "\${fq1}"
+        echo "\${fq2}"
+        mkfifo "\${fq1}"
+        sleep 0.5
+        mkfifo "\${fq2}"
+        # only take 5M reads for a test run
+        zcat ${r1_fastq} | head -n 5000000 | gzip -c > "\${fq1}" &
+        zcat ${r2_fastq} | head -n 5000000 | gzip -c > "\${fq2}" &
+    fi
+        
+
     python "${py_dir}/split_pairedtag_v3.py" "\${fq1}" "\${fq2}" "${combin_barcodes}" "${sample_barcodes}" "${linker_file}" ./out/ --library_id "\${libid}" --threads "${params.r2_parse_threads}" --sequence_id "${sequence_id}" --umi_size "${params.umi_len}"
-    #for fqf in `ls out`; do
-    #    gzip "out/\${fqf}" &
-    #done
-    #wait 
+    
+    linkerfq=\$(echo ${r2_fastq} | awk '{print \$1}')
+    python "${py_dir}/pull_linkers.py" "\${linkerfq}" "${sequence_logo}"
     """
 
   stub:
@@ -258,16 +285,19 @@ process add_tags {
     tuple file(annot5_file), val(annot5_tag), val(annot5_fmt)
     tuple file(annot6_file), val(annot6_tag), val(annot6_fmt)
     file py_dir
+    file sh_dir
 
 
 
   output:
     tuple val(alignment_id), file(annot_bam_file), val(seqtype), val(assay_id), val(antibody)
+    tuple val(alignment_id), file(dup_metrics)
 
   script:
     
     annot_bam_file = bam_file.simpleName - '.bam' + '_tag.bam'
     sample_id=bam_file.simpleName.split('__')[3]
+    dup_metrics=bam_file.simpleName - '.bam' + '.duplication_metrics.csv'
     """
     strip () {
         echo "\${1%%.*}"
@@ -299,11 +329,22 @@ process add_tags {
     else
         python "${py_dir}"/add_tags.py "${bam_file}" "${annot_bam_file}" --library "${alignment_id}" --antibody "${antibody}" --assay_id "${assay_id}" --sample_id "${sample_id}" \$tag_args
     fi
+    view_xargs="-F 4"
+    if [ "${seqtype}" == "dna" ]; then
+      alen=\$(samtools view "${annot_bam_file}" | awk '{print length(\$10)}' | head -n 100 | sort -nr | head -n 10 | awk 'BEGIN{tot=0}{tot += \$1}END{print(tot/10)}')
+      # if the average read length is long enough, try to align in paired-end mode
+      if [ "\${alen}" -ge 120 ]; then
+          view_xargs="-F 4 -f 64 "
+      fi
+    fi
+    samtools view \${view_xargs} "${annot_bam_file}" | "${sh_dir}/awkdecode" | uniq -c | awk -v bf="${annot_bam_file}" '{ total += \$1; if (\$1 > 1) dup += (\$1-1) } END { print bf","total","dup","100*dup/total}' >  "${dup_metrics}"
+        
     """
 
   stub:
     annot_bam_file = bam_file.simpleName - '.bam' + '_tag.bam'
+    dup_metrics=bam_file.simpleName - '.bam' + '.duplication_metrics.csv'
     """
-    touch $annot_bam_file
+    touch $annot_bam_file $dup_metrics
     """
 }

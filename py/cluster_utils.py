@@ -372,8 +372,9 @@ def do_dna_cluster_(dat_dna_analysis, npc, drop_first=True, resolution=0.5,
     dat_dna_analysis = scp.tl.tsne(dat_dna_analysis, use_rep=rep_use, n_pcs=npc, copy=True)
     #dat_dna_analysis = scp.tl.leiden(dat_dna_analysis, copy=True, resolution=resolution)
     #dat_dna_analysis = scp.tl.louvain(dat_dna_analysis, copy=True, resolution=resolution)
-    km = KMeans(n_clusters=12, random_state=123).fit(dat_dna_analysis.obsm[rep_use])
-    dat_dna_analysis.obs.loc[:, 'leiden'] = km.labels_
+    double_emb = np.hstack([dat_dna_analysis.obsm['X_umap'], dat_dna_analysis.obsm['X_tsne']])
+    km = KMeans(n_clusters=15, random_state=123).fit(double_emb)
+    dat_dna_analysis.obs.loc[:, 'cluster'] = ['cluster_%d' % x for x in km.labels_]
 
     fig, axs = plt.subplots(2, 3, constrained_layout=True, figsize=(6*2.5, 4*2.5))
     axs[0, 0].scatter(np.arange(s.shape[0]), s, color='black', s=2)
@@ -391,13 +392,22 @@ def do_dna_cluster_(dat_dna_analysis, npc, drop_first=True, resolution=0.5,
         'TSNE1': dat_dna_analysis.obsm['X_tsne'][:, 0],
         'TSNE2': dat_dna_analysis.obsm['X_tsne'][:, 1],
         color_key: dat_dna_analysis.obs.loc[:, color_key],
-        'leiden': dat_dna_analysis.obs.leiden
+        'cluster': dat_dna_analysis.obs.cluster
     })
-    sbn.scatterplot(data=pca_data, x='PC1', y='PC2', hue=color_key, legend=False, ax=axs[0, 1])
-    sbn.scatterplot(data=pca_data, x='PC3', y='PC4', hue=color_key, legend=False, ax=axs[0, 2])
-    sbn.scatterplot(data=pca_data, x='UMAP1', y='UMAP2', hue='leiden', legend=False, ax=axs[1, 0])
-    sbn.scatterplot(data=pca_data, x='UMAP1', y='UMAP2', hue=color_key, legend=False, ax=axs[1, 1])
-    sbn.scatterplot(data=pca_data, x='TSNE1', y='TSNE2', hue='leiden', legend=False, ax=axs[1, 2])
+    logit = lambda y: np.exp(y)/(1+np.exp(y))
+    ptsize = np.exp(1.96 + 2.05 * (1 - logit(1.81 * (np.log(pca_data.shape[0]) - 8.89))))  # magic sizing function
+    print(f'ptsize is {ptsize}')
+    pca_data = pca_data.sample(frac=1)  # shuffle
+    sbn.scatterplot(data=pca_data, x='PC1', y='PC2', hue=color_key, legend=False, ax=axs[0, 1], s=ptsize)
+    axs[0,1].set_title(color_key)
+    sbn.scatterplot(data=pca_data, x='PC3', y='PC4', hue=color_key, legend=False, ax=axs[0, 2], s=ptsize)
+    axs[0,2].set_title(color_key)
+    sbn.scatterplot(data=pca_data, x='UMAP1', y='UMAP2', hue='cluster', legend=False, ax=axs[1, 0], s=ptsize)
+    axs[1,0].set_title('cluster')
+    sbn.scatterplot(data=pca_data, x='TSNE1', y='TSNE2', hue=color_key, legend=False, ax=axs[1, 1], s=ptsize)
+    axs[1,1].set_title(color_key)
+    sbn.scatterplot(data=pca_data, x='TSNE1', y='TSNE2', hue='cluster', legend=False, ax=axs[1, 2], s=ptsize)
+    axs[1,2].set_title('cluster')
 
     for r in range(2):
         for c in range(3):
@@ -408,23 +418,6 @@ def do_dna_cluster_(dat_dna_analysis, npc, drop_first=True, resolution=0.5,
     if PDF:
         plt.savefig(PDF, format='pdf', dpi=250)
         plt.close()
-
-    fig, axs = plt.subplots(2, 3, constrained_layout=True, figsize=(6*2.5, 4*2.5))
-    axs[0, 0].scatter(np.arange(s.shape[0]), s, color='black', s=2)
-    axs[0, 0].set_xlabel('Eigenvalue #')
-    axs[0, 0].set_ylabel('Eigenvalue')
-    sbn.scatterplot(data=pca_data, x='PC1', y='PC2', hue=color_key, legend=False, ax=axs[0, 1], s=10)
-    sbn.scatterplot(data=pca_data, x='PC3', y='PC4', hue=color_key, legend=False, ax=axs[0, 2], s=10)
-    sbn.scatterplot(data=pca_data, x='UMAP1', y='UMAP2', hue='leiden', legend=False, ax=axs[1, 0], s=10)
-    sbn.scatterplot(data=pca_data, x='UMAP1', y='UMAP2', hue=color_key, legend=False, ax=axs[1, 1], s=10)
-    sbn.scatterplot(data=pca_data, x='TSNE1', y='TSNE2', hue='leiden', legend=False, ax=axs[1, 2], s=10)
-    
-    plt.gca().set_rasterized(True)
-    fig.suptitle(plot_title)
-    if PDF:
-        plt.savefig(PDF, format='pdf', dpi=250)
-        plt.close()
-    
 
     return dat_dna_analysis
 
@@ -518,12 +511,14 @@ def cluster_antibody_dna(dat_dna, antibody, n_pcs=15, drop_first=1, min_bins=300
 
     # num umi / cell by assay / library
     sbn.boxplot(data=dat_dna_analysis.obs, x='assay_info', y='filt_dna_umi', ax=axs[1,1])
+    axs[1, 1].set_yscale('log')
     axs[1, 1].set_xticklabels(axs[1, 1].get_xticklabels(), rotation=90, fontsize=7)
     axs[1, 1].set_xlabel('Assay')
     axs[1, 1].set_ylabel('# of UMI (per cell, post-bin filter)')
     axs[1, 1].set_rasterized(True)
 
     sbn.boxplot(data=dat_dna_analysis.obs, x='lysis_id', y='filt_dna_umi', ax=axs[1,2])
+    axs[1, 2].set_yscale('log')
     axs[1, 2].set_xticklabels(axs[1, 2].get_xticklabels(), rotation=90, fontsize=7)
     axs[1, 2].set_xlabel('Library')
     axs[1, 2].set_ylabel('# of UMI (per cell, post-bin filter)')
@@ -881,8 +876,8 @@ def cluster_pairedtag_rna(obj, min_umi=350, max_umi=3500, min_cells_gene=10, n_p
     scp.tl.umap(obj)
     #scp.tl.leiden(obj, resolution=res)
     scp.tl.tsne(obj, use_rep=rep_use)
-    km = KMeans(n_clusters=12, random_state=123).fit(obj.obsm[rep_use])
-    obj.obs.loc[:, 'leiden'] = km.labels_
+    km = KMeans(n_clusters=40, random_state=123).fit(obj.obsm['X_tsne'])
+    obj.obs.loc[:, 'leiden'] = ['cluster_%d' % x for x in km.labels_]
 
 
     color_key = harmonize if harmonize is not None else 'assay_info'
