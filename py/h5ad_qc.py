@@ -12,6 +12,7 @@ def get_args():
     parser.add_argument('rna_gene_umi')
     parser.add_argument('dna_bin_read')
     parser.add_argument('dna_bin_umi')
+    parser.add_argument('--sample_digest', help='the sample digest file', default=None)
     parser.add_argument('outpdf')
     return parser.parse_args()
 
@@ -33,6 +34,12 @@ def main(args):
     dat_mg = dat_rna_read.merge(dat_rna_umi[['cell_id', 'rna_ngenes_umi', 'rna_umis']], on='cell_id')
     dat_mg = dat_mg.merge(dat_dna_read[['cell_id', 'dna_nbins_read', 'dna_reads']], on='cell_id')
     dat_mg = dat_mg.merge(dat_dna_umi[['cell_id', 'dna_nbins_umi', 'dna_umis']], on='cell_id')
+
+    if args.sample_digest is not None:
+        digest = pd.read_csv(args.sample_digest)
+        digest['sample_full'] = digest.sample_id.astype(str) + '\n' + digest.antibody_target.astype(str)
+        id2sm = dict(zip(digest.assay_info, digest.sample_full))
+        dat_mg['sample_id'] = dat_mg.sample_id.map(id2sm.__getitem__)
 
     # update the RNA and DNA objects to reflect the merged data
     new_cols = ['dna_nbins_read', 'dna_reads', 'dna_nbins_umi',

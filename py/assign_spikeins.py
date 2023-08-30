@@ -15,7 +15,7 @@ def get_args():
     parser.add_argument('--min_qual', type=int, default=30)
     parser.add_argument('--seqtype', help='the sequence type', default='seq')
     parser.add_argument('--dump_counts', help='dump raw counts to this file', default=None)
-    parser.add_argument('--duplicate_reads', help='Assign reads to both primary and spikein and do not filter')
+    parser.add_argument('--duplicate_reads', help='Assign reads to both primary and spikein and do not filter', action='store_true')
     parser.add_argument('--unpaired', action='store_true', help='No pairs in bam')
 
     return parser.parse_args()
@@ -86,7 +86,8 @@ def main(args):
     sbam = pysam.AlignmentFile(args.spike_bam)
     opbam = pysam.AlignmentFile(args.filt_primary_bam, mode='w', template=pbam)
     osbam = pysam.AlignmentFile(args.filt_spike_bam, mode='w', template=sbam)
-    for (r1_prime, r2_prime), (r1_spike, r2_spike) in zip(iterpairs(pbam), iterpairs(sbam)):
+    j=1
+    for (r1_prime, r2_prime), (r1_spike, r2_spike) in zip(iterbam(pbam, not args.unpaired), iterbam(sbam, not args.unpaired)):
         barcode = ':'.join(r1_prime.query_name.split('|')[-1].split(':')[1:3])
         if args.duplicate_reads or barcode not in barcode_probas:   # branch 1: keep the reads in both bams
             opbam.write(r1_prime)
@@ -109,9 +110,11 @@ def main(args):
                 if not args.unpaired:
                     opbam.write(r2_prime)
                     osbam.write(r2_spike)
+        j += 1
     opbam.close()
     osbam.close() 
 
+    print(f'Wrote {j} reads')
     if args.dump_counts is not None:
         with open(args.dump_counts, 'wt') as out:
             for bc, tab in barcode_counts.items():

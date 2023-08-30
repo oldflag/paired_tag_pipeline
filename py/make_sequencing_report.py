@@ -3,6 +3,12 @@ import os
 import matplotlib
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+from argparse import ArgumentParser
+
+parser = ArgumentParser()
+parser.add_argument('--paired', action='store_true', help='Will divide aligned/duplicate reads by 2 to account for paired libraries (DNA only)')
+
+args = parser.parse_args()
 
 # read in the type QC files
 files = os.listdir('.')
@@ -12,7 +18,7 @@ typeqc_files = [x for x in files if x.endswith('type_qc.csv')]
 type_qc = None
 for tcf in typeqc_files:
   sequence_id = tcf.split('.')[0]
-  lysis_id = sequence_id[-2:]
+  lysis_id = sequence_id[2:]
   expected_type = 'rna' if 'SR' in sequence_id else 'dna'
   dat = pd.read_csv(tcf)
   dat.columns = ['assay_info', 'inferred_type', 'reads']
@@ -39,6 +45,9 @@ for dfile in dup_files:
     dat = pd.read_csv(dfile)
     # SRA2__A1679000649344__H3K27me3__161Early_10Aligned_tag.bam,61688,19929,32.3061
     dat.columns = ['bam', 'aligned', 'duplicate', 'dup_pct']
+    if library_type == 'dna' and args.paired:
+        dat.aligned = (dat.aligned/2).astype(int)
+        dat.duplicate = (dat.duplicate/2).astype(int)
     dat['assay_string'] = dat.bam.astype(str).map(lambda x: x.split('Aligned')[0].split('_tag')[0])
     dat['inferred_type'] = library_type
     if dup_qc is None:
@@ -52,6 +61,7 @@ info2assay = dict([(t, t.split('__')[1]) for t in {x for x in dup_qc.assay_strin
 ## preprocess the type QC
 type_qc['reads_match'] = type_qc['reads'] * (type_qc['inferred_type'] == type_qc['expected_type']).astype(int)
 type_qc['mtype'] = (type_qc['inferred_type'] == type_qc['expected_type']).astype(int)
+type_qc.to_csv('debug.csv')
 
 # Group by sequence_id and assay_info
 grouped = type_qc.groupby(['sequence_id', 'assay_info', 'lysis_id'])
@@ -86,17 +96,29 @@ library_qc['% Aligned'] = round(1000 * library_qc.aligned/library_qc.libtype_mat
 library_qc['% Duplicate'] = round(1000 * library_qc.duplicate/library_qc.aligned)/10
 library_qc.sort_values(by='sequence_id').to_csv('LIBRARY_REPORT.csv', index=False)
 
+print(combined_qc.sequence_id.unique())
 ## create the sample tables
+tot_reads = list()
 for ainf in combined_qc.assay_info.unique():
-    qc_info = combined_qc[combined_qc.assay_info == ainf]
+    qc_info = combined_qc[combined_qc.assay_info == ainf].copy()
     samid = qc_info.assay_name.values[0]
-    sample_qc = qc_info[['sequence_id', 'lysis_id', 'inferred_type', 'reads', 'reads_match', 'aligned', 'duplicate']].copy()
-    sample_qc.columns = ['sequence_id', 'lysis_id', 'type', 'valid_barcodes', 'libtype_match', 'aligned', 'duplicate']
+    qc_info['sample_id'] = samid
+    sample_qc = qc_info[['sample_id', 'sequence_id', 'lysis_id', 'inferred_type', 'reads', 'reads_match', 'aligned', 'duplicate']].copy()
+    sample_qc.columns = ['sample_id', 'sequence_id', 'lysis_id', 'type', 'valid_barcodes', 'libtype_match', 'aligned', 'duplicate']
     sample_qc['% Contam'] = round(1000 * (1 - sample_qc.libtype_match / sample_qc.valid_barcodes))/10
     sample_qc['% Aligned'] = round(1000 * sample_qc.aligned / sample_qc.libtype_match)/10
     sample_qc['% Duplicate'] = round(1000 * sample_qc.duplicate / sample_qc.aligned)/10
+    print(sample_qc.to_string())
     sample_qc.sort_values(by='sequence_id').to_csv(f'SAMPLE_REPORT.{samid}.csv', index=False)
+    tot_reads.append(sample_qc[sample_qc.sample_id.map(lambda s: 'UNK' not in s)][['sample_id', 'sequence_id', 'aligned']].copy())
 
+tot_reads = pd.concat(tot_reads)
+lib_reads = tot_reads.groupby('sequence_id')['aligned'].sum().reset_index()
+lib_reads.columns = ['sequence_id', 'total_aligned']
+tot_reads = tot_reads.merge(lib_reads, on='sequence_id')
+tot_reads['% balance'] = round(1000 * tot_reads.aligned / tot_reads.total_aligned)/10
+
+tot_reads.pivot(index='sequence_id', columns='sample_id', values='% balance').to_csv('LIBRARY_BALANCE.csv')
 
 # Set up LaTeX text rendering
 #plt.rcParams['text.usetex'] = True
@@ -105,6 +127,7 @@ plt.rcParams['font.family'] = 'serif'
 # Create a figure and axis
 fig, ax = plt.subplots(figsize=(12, 6))
 
+library_qc.to_csv('LIBRARY_raw.csv')
 df = library_qc[['sequence_id', 'lysis_id', 'type', 'reads', '% Valid', '% Contam', '% Aligned', '% Duplicate']]
 df.columns = ['Library', 'Lysis', 'Type', '# Reads', '% Valid', '% Contam.', '% Aligned', '% Duplicate']
 # Plot the table

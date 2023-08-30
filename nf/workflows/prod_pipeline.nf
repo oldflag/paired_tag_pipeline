@@ -80,73 +80,73 @@ params.fragment_ncore = 4
 params.genome_name = [ 
   "hs": "GRCh38",
   "mm": "GRCm39",
-  "rat": "rn7"
+  "rn": "rn7"
 ]
 
 params.genome_reference_dir = [
   "hs": file(params.GENOME_DIR + "/human/"),
   "mm": file(params.GENOME_DIR + "/mouse/"),
-  "rat": file(params.GENOME_DIR + "/rat/")
+  "rn": file(params.GENOME_DIR + "/rat/")
 ]
 
 params.genome_reference_name = [
   "hs": "GRCh38.primary_assembly.genome.fa",
   "mm": "GRCm39.primary_assembly.genome.fa.gz",
-  "rat": "rn7.fa"
+  "rn": "rn7.fa"
 ]
 
 params.genome_reference = [
   "hs": file(params.GENOME_DIR + "/human/GRCh38.primary_assembly.genome.fa"),
   "mm": file(params.GENOME_DIR + "/mouse/GRCm39.primary_assembly.genome.fa.gz"),
-  "rat": file(params.GENOME_DIR + "/rat/rn7.fa")
+  "rn": file(params.GENOME_DIR + "/rat/rn7.fa")
 ]
 
 params.star_index = [
   "hs": file(params.GENOME_DIR + "/human/star_index/"),
   "mm": file(params.GENOME_DIR + "/mouse/star_index/"),
-  "rat": file(params.GENOME_DIR + "/rat/star_index/")
+  "rn": file(params.GENOME_DIR + "/rat/star_index/")
 ]
 
 params.bwa_index = [
   "hs": file(params.GENOME_DIR + "/human/bwa_index/"),
   "mm": file(params.GENOME_DIR + "/mouse/bwa_index/"),
-  "rat": file(params.GENOME_DIR + "/rat/bwa_index/")
+  "rn": file(params.GENOME_DIR + "/rat/bwa_index/")
 ]
 
 params.genome_bin_file = [
   "hs": file(params.GENOME_DIR + "/human/GRCh38_5kb.saf"),
   "mm": file(params.GENOME_DIR + "/mouse/GRCm39_5kb.saf"),
-  "rat": file(params.GENOME_DIR + "/rat/rn7_5kb.saf")
+  "rn": file(params.GENOME_DIR + "/rat/rn7_5kb.saf")
 ]
 
 params.genome_saf_file = [
   "hs": file(params.GENOME_DIR + "/human/gencode.v39.annotation.saf"),
   "mm": file(params.GENOME_DIR + "/mouse/gencode.vM28.annotation.saf"),
-  "rat": file(params.GENOME_DIR + "/rat/Rattus_norvegicus.mRatBN7.2.110.chr.saf")
+  "rn": file(params.GENOME_DIR + "/rat/Rattus_norvegicus.mRatBN7.2.110.chr.saf")
 ]
 
 params.genome_gtf_collapsed_file = [
   "hs": file(params.GENOME_DIR + "/human/gencode.v39.annotation.collapsed.gtf"),
   "mm": file(params.GENOME_DIR + "/mouse/gencode.vM28.annotation.collapsed.gtf"),
-  "rat": file(params.GENOME_DIR + "/rat/Rattus_norvegicus.mRatBN7.2.110.chr.collapsed.gtf")
+  "rn": file(params.GENOME_DIR + "/rat/Rattus_norvegicus.mRatBN7.2.110.chr.collapsed.gtf")
 ]
 
 params.heterochromatin_saf_file = [
   "hs": file(params.GENOME_DIR + "/human/GSE127123_GBM_heterochromatin.hg39.saf"),
   "mm": file(params.GENOME_DIR + "/mouse/20220603-mm39-brain-heterochromatin.saf"),
-  "rat": file(params.GENOME_DIR + "/rat/rn7_10kb.saf")
+  "rn": file(params.GENOME_DIR + "/rat/rn7_10kb.saf")
 ]
 
 params.promoter_saf_file = [
   "hs": file(params.GENOME_DIR + "/human/RegEmtDB_promoter_hg38.saf"),
   "mm": file(params.GENOME_DIR + "/mouse/old_annots/GRCm39_Encode_Promoters.saf"),
-  "rat": file(params.GENOME_DIR + "/rat/rn7_promoters.saf")
+  "rn": file(params.GENOME_DIR + "/rat/rn7_promoters.saf")
 ]
 
 params.enhancer_saf_file = [
   "hs": file(params.GENOME_DIR + "/human/RegEmtDB_enhancer_hg38.saf"),
   "mm": file(params.GENOME_DIR + "/mouse/old_annots/GRCm39_Encode_Enhancers.saf"),
-  "rat": file(params.GENOME_DIR + "/rat/rn7_pseudoenhancers.saf")
+  "rn": file(params.GENOME_DIR + "/rat/rn7_pseudoenhancers.saf")
 ]
 
 params.alignment_ncore = 4
