@@ -105,6 +105,8 @@ def main(args):
                 if not args.unpaired:
                     osbam.write(r2_spike)
             else:
+                r1_prime.query_name = r1_prime.query_name + '|ambig'
+                r1_spike.query_name = r1_spike.query_name + '|ambig'
                 opbam.write(r1_prime)
                 osbam.write(r1_spike)
                 if not args.unpaired:

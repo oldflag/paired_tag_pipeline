@@ -110,9 +110,9 @@ process MACS2_multi {
     #python "${params.HOME_REPO}"/py/macs2_merge.py bamlist.txt > "${filt_bam}"
     
     macs2 callpeak -t $bamlist -n "${basename}" --outdir . \
-       -q 0.1 -g "${genome_type}" --nomodel || true
+       -q 0.1 -g "${genome_type}" || true
     macs2 callpeak -t $bamlist --broad -n "${basename}" --outdir . \
-       -q 0.1 -g "${genome_type}" --nomodel  || true
+       -q 0.1 -g "${genome_type}" || true
 
     cat "${narrow_peaks}" "${broad_peaks}" | cut -f1-5 | bedtools sort -i /dev/stdin | bedtools merge -i /dev/stdin > "${merged_peaks}"
     echo "GeneID	Chr	Start	End	Strand" > "${peaks_saf}"
@@ -146,6 +146,87 @@ process MACS2_multi {
     """
     
 }
+
+
+/*
+ * As MACS2_multi, but with background extraction + estimation
+ * Expects something like
+ * MACS2_multi(baminfo.map{it -> tuple(it[0], it[1].collect(), params.RUN_NAME)})
+ */
+process MACS2_multi_background {
+  // conda params.HOME_REPO + '/nf/envs/macs2.yaml'
+
+  input:
+    tuple val(antibody_name), file(bam_file), val(experiment_name)
+    val genome_type
+    file genome_dir
+    val genome_name
+    file py_dir
+    file sh_dir
+    
+
+  output:
+    tuple val(experiment_name), file(merged_peaks), file(peaks_saf), val(antibody_name)
+    file track_bw
+
+  script:
+    basename = "${experiment_name}_${antibody_name}"
+    bamlist = bam_file.join(' ')
+    // Create unique identifiers for FIFOs
+    fg_bamfile = "${basename}_fg.bam"
+    bg_bamfile = "${basename}_bg.bam"
+    narrow_peaks = "${basename}_peaks.narrowPeak"
+    broad_peaks = "${basename}_peaks.broadPeak"
+    merged_peaks = "${basename}_peaks_merged.bed"
+    peaks_saf = "${basename}_peaks_merged.saf"
+    track_bw = "${basename}.bw"
+    bamlist2 = bam_file.join(' --bam ')
+    // genome_ref = params.genome_reference[genome_type]
+    """
+
+    # Use split_bam_fg_bg.py script to split each bam file into foreground and background reads
+    python ${py_dir}/split_bam_fg_bg.py --fg_out ${fg_bamfile} --bg_out ${bg_bamfile} ${bamlist} 
+    samtools sort "${fg_bamfile}" -o tmp.bam && mv tmp.bam "${fg_bamfile}"
+    samtools sort "${bg_bamfile}" -o tmp.bam && mv tmp.bam "${bg_bamfile}"
+
+    macs2 callpeak -t ${fg_bamfile} -c ${bg_bamfile} -n "${basename}" --outdir . \
+       -q 0.1 -g "${genome_type}" --nomodel || true
+    macs2 callpeak -t ${fg_bamfiel} -c ${bg_bamfile} --broad -n "${basename}" --outdir . \
+       -q 0.1 -g "${genome_type}" --nomodel  || true
+
+    cat "${narrow_peaks}" "${broad_peaks}" | cut -f1-5 | bedtools sort -i /dev/stdin | bedtools merge -i /dev/stdin > "${merged_peaks}"
+    echo "GeneID	Chr	Start	End	Strand" > "${peaks_saf}"
+    cat "${merged_peaks}" | awk '{print "${antibody_name}_Peak."NR"@"\$1":"\$2":"\$3"\t"\$1"\t"\$2"\t"\$3"\t."}' >> "${peaks_saf}"
+      nl=\$(cat ${peaks_saf} | wc -l)
+      if [ "\${nl}" -eq "1" ]; then
+          # just the header
+          if [ "${genome_type}" == "hs" ]; then
+              echo "nopeak	chr1	15000000	16000000	." >> ${peaks_saf}
+          else
+              echo "nopeak	chr1	15000000	16000000	." >> ${peaks_saf}
+          fi
+      fi
+    #samtools merge $bam_file -o "${basename}_pb.bam"
+    #BAMscale scale -k no -r unscaled -z 5 -j 5 -q 30 -o ./wigs -t 4 --bam $bamlist2
+    #bash "${sh_dir}/make_tracks.bash" bams.txt "${py_dir}/bam2frag.py" "${track_bw}" "${genome_dir}/${genome_name}.fai"
+    # scale and rename
+    BAMscale scale -k no -r unscaled --bam ${fg_bamfile}
+    mv ${fg_bamfile} "${basename}_pb.bam"
+    rm ${bg_bamfile}
+    mv *.bw ${track_bw}
+    """
+    
+  stub:
+    basename = "${experiment_name}_${antibody_name}"
+    merged_peaks = "${basename}_peaks_merged.bed"
+    peaks_saf = "${basename}_peaks_merged.saf"
+    track_bw = "${basename}.bw"
+    """
+    touch "${merged_peaks}" "${peaks_saf}" "${track_bw}"
+    """
+    
+}
+
 
 /*
  * This module defines a process to merge multiple SAF files 

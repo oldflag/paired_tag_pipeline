@@ -62,7 +62,7 @@ def chunk_to_frags_unk(bam_with_chunk):
     cell_counts, cell_reads, isize = Counter(), Counter(), Counter()
     for read in fetch(bampath, (contig, start, end)):
        if read.is_mapped and (read.reference_end - read.reference_start) >= 20 and read.mapping_quality > 0:
-           umi = read.query_name.split('|')[-1]
+           umi = read.query_name.split('|')[2]
            if read.is_paired and read.mate_is_mapped and read.template_length > 0 and read.template_length < 2000:
                fraglen = read.query_alignment_length + read.template_length
            else:

@@ -134,7 +134,7 @@ def parse_samples_pp(args):
         sample_ids = Counter(
           (x.query_name.split('|')[2].split(':')[-2],
            x.query_name.split('|')[1].split(':')[-2])
-          for x in handle if x.query_name[-1] != '*')
+          for x in handle if x.query_name.split('|')[2] != '*')
         handle.close()
 
         best = dict()
@@ -254,7 +254,7 @@ def transform_read_rt(read, read_n, sbc_rg_map, library, antibody, assay_info, t
     -----------
     transformed read - name reverted to the sequencer name, and tags updated
     """
-    split_fields = read.query_name.split(':')
+    split_fields = read.query_name.split('|')[2].split(':')
     bc2, bc1, sm_well, umi = split_fields[-4:]
     antibody, library = assay_info[sm_well]['antibody_name'], assay_info[sm_well]['library_id']
     assay_id, sample_id = assay_info[sm_well]['assay_id'], assay_info[sm_well]['sample_id']
@@ -277,7 +277,7 @@ def transform_read(read, read_n, sbc_rg_map, library, antibody, tracks=None):
     """
     Given a read of the form
     
-    sequencer_read_name|umi:bc1:bc2:sbc:type|umi:bc1:bc2:sbc:type
+    sequencer_read_name|umi:bc1:bc2:sbc:type|umi:bc1:bc2:sbc:type{|ambig_code}
     
     where the first set of barcodes is parsed, and the second raw,
     extract the UMI and barcode information and place it into
@@ -300,7 +300,7 @@ def transform_read(read, read_n, sbc_rg_map, library, antibody, tracks=None):
     -----------
     transformed read - name reverted to the sequencer name, and tags updated
     """
-    rawname, parsed, full = read.query_name.split('|')
+    rawname, parsed, full = read.query_name.split('|')[:3]
     read.set_tag('CR', full)
     try:
         read.set_tag('BC', full.split(':')[-2])
